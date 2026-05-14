@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f5f0eb">
+<title>我的节奏 · AuDHD 计划</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f5f0eb;
+  --bg2: #ede8e1;
+  --bg3: #e5dfd7;
+  --surface: #faf7f3;
+  --surface2: #f0ebe3;
+  --text: #2a2520;
+  --text2: #6b6158;
+  --text3: #9b9088;
+  --accent: #8b6f5e;
+  --accent2: #c4956a;
+  --peak: #4a7c6f;
+  --peak-bg: #e8f4f0;
+  --peak-light: #c8e6de;
+  --low: #8b6f5e;
+  --low-bg: #f4ede8;
+  --low-light: #e6d5cc;
+  --warn: #c4956a;
+  --warn-bg: #fdf3e7;
+  --danger: #b85c4e;
+  --border: rgba(42,37,32,0.1);
+  --border2: rgba(42,37,32,0.06);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 2px 16px rgba(42,37,32,0.08);
+  --shadow-lg: 0 8px 32px rgba(42,37,32,0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* Layout */
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+.main { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+.page { display: none; padding: 20px 16px 100px; max-width: 480px; margin: 0 auto; }
+.page.active { display: block; }
+
+/* Nav */
+.nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex; z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 10px 4px 8px; gap: 3px; cursor: pointer;
+  color: var(--text3); font-size: 10px; font-weight: 500;
+  transition: color 0.2s; border: none; background: none;
+}
+.nav-item.active { color: var(--accent); }
+.nav-item svg { width: 22px; height: 22px; stroke-width: 1.8; }
+
+/* Top bar */
+.topbar {
+  padding: 16px 16px 0;
+  max-width: 480px; margin: 0 auto;
+}
+.topbar-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 20px; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar-date { font-size: 12px; color: var(--text3); font-family: 'DM Sans', sans-serif; }
+
+/* Mode Banner */
+.mode-banner {
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  position: relative; overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.mode-banner:active { transform: scale(0.98); }
+.mode-peak-banner { background: var(--peak-bg); border: 1.5px solid var(--peak-light); }
+.mode-low-banner { background: var(--low-bg); border: 1.5px solid var(--low-light); }
+.mode-label { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; margin-bottom: 4px; }
+.mode-peak-banner .mode-label { color: var(--peak); }
+.mode-low-banner .mode-label { color: var(--low); }
+.mode-title { font-family: 'Noto Serif SC', serif; font-size: 18px; color: var(--text); margin-bottom: 4px; }
+.mode-sub { font-size: 13px; color: var(--text2); }
+.mode-switch-hint { font-size: 11px; color: var(--text3); margin-top: 8px; }
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.card-title {
+  font-size: 12px; font-weight: 500; letter-spacing: 0.08em;
+  color: var(--text3); margin-bottom: 12px; text-transform: uppercase;
+}
+.card-heading {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 16px; color: var(--text); margin-bottom: 8px;
+}
+
+/* Checklist */
+.check-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 0; border-bottom: 1px solid var(--border2);
+  cursor: pointer; transition: opacity 0.2s;
+}
+.check-item:last-child { border-bottom: none; padding-bottom: 0; }
+.check-item.done { opacity: 0.45; }
+.check-box {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+  transition: all 0.2s; background: var(--bg2);
+}
+.check-item.done .check-box { background: var(--peak); border-color: var(--peak); }
+.check-box svg { width: 12px; height: 12px; stroke: white; display: none; }
+.check-item.done .check-box svg { display: block; }
+.check-content { flex: 1; }
+.check-label { font-size: 14px; color: var(--text); line-height: 1.4; }
+.check-note { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+/* Log buttons */
+.log-btn {
+  width: 100%; padding: 13px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text); font-size: 14px; font-family: inherit;
+  cursor: pointer; text-align: left;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px; transition: all 0.15s;
+}
+.log-btn:active { background: var(--bg2); transform: scale(0.99); }
+.log-btn-icon { font-size: 18px; }
+.log-btn-label { flex: 1; padding: 0 12px; }
+.log-btn-arrow { color: var(--text3); }
+
+/* Quick log area */
+.quick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.quick-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); padding: 14px 12px;
+  cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.quick-card:active { background: var(--bg2); transform: scale(0.98); }
+.quick-card-icon { font-size: 22px; margin-bottom: 4px; }
+.quick-card-label { font-size: 12px; color: var(--text2); font-weight: 500; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(42,37,32,0.45);
+  z-index: 200; display: none; align-items: flex-end; justify-content: center;
+  padding: 0;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  padding: 24px 20px 40px;
+  width: 100%; max-width: 480px;
+  max-height: 90vh; overflow-y: auto;
+  animation: slideUp 0.25s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-handle { width: 36px; height: 4px; background: var(--bg3); border-radius: 2px; margin: 0 auto 20px; }
+.modal-title { font-family: 'Noto Serif SC', serif; font-size: 18px; margin-bottom: 20px; }
+.modal-label { font-size: 12px; color: var(--text3); font-weight: 500; margin-bottom: 6px; margin-top: 14px; }
+.modal-input, .modal-select, .modal-textarea {
+  width: 100%; padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg2); color: var(--text);
+  font-size: 15px; font-family: inherit;
+  outline: none; transition: border-color 0.2s;
+}
+.modal-input:focus, .modal-select:focus, .modal-textarea:focus { border-color: var(--accent); }
+.modal-textarea { min-height: 80px; resize: none; }
+.modal-select { appearance: none; }
+.btn-primary {
+  width: 100%; padding: 14px;
+  background: var(--accent); color: white;
+  border: none; border-radius: var(--radius-sm);
+  font-size: 15px; font-weight: 500; font-family: inherit;
+  cursor: pointer; margin-top: 20px; transition: opacity 0.2s;
+}
+.btn-primary:active { opacity: 0.85; }
+.btn-ghost {
+  width: 100%; padding: 12px;
+  background: none; color: var(--text2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px; font-family: inherit;
+  cursor: pointer; margin-top: 8px;
+}
+
+/* Emotion select */
+.emoji-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.emoji-btn {
+  padding: 8px 12px; border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--bg2); cursor: pointer;
+  font-size: 14px; transition: all 0.15s;
+}
+.emoji-btn.selected { border-color: var(--accent); background: var(--low-bg); }
+
+/* Stats grid */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); padding: 14px 12px;
+}
+.stat-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+.stat-value { font-family: 'Noto Serif SC', serif; font-size: 22px; color: var(--text); }
+.stat-unit { font-size: 12px; color: var(--text3); }
+.stat-change { font-size: 11px; margin-top: 2px; }
+.stat-change.up { color: var(--warn); }
+.stat-change.down { color: var(--peak); }
+
+/* Chart */
+.chart-wrap { position: relative; height: 200px; margin: 8px 0; }
+
+/* Log list */
+.log-entry {
+  padding: 12px 0; border-bottom: 1px solid var(--border2);
+  display: flex; gap: 12px; align-items: flex-start;
+}
+.log-entry:last-child { border-bottom: none; }
+.log-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent2); margin-top: 6px; flex-shrink: 0;
+}
+.log-entry-date { font-size: 11px; color: var(--text3); }
+.log-entry-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+
+/* Binge helper */
+.binge-step {
+  display: flex; gap: 14px; padding: 12px 0;
+  border-bottom: 1px solid var(--border2); align-items: flex-start;
+}
+.binge-step:last-child { border-bottom: none; }
+.binge-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--low-bg); color: var(--low);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; flex-shrink: 0;
+}
+.binge-text { font-size: 14px; line-height: 1.5; color: var(--text); }
+.binge-note { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+/* Affirm box */
+.affirm-box {
+  background: var(--warn-bg);
+  border: 1px solid rgba(196,149,106,0.3);
+  border-radius: var(--radius); padding: 16px;
+  margin-bottom: 12px;
+}
+.affirm-text { font-family: 'Noto Serif SC', serif; font-size: 15px; color: var(--text); line-height: 1.8; }
+
+/* Reminder toast */
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-80px);
+  background: var(--text); color: white;
+  padding: 12px 20px; border-radius: 20px;
+  font-size: 13px; z-index: 300; transition: transform 0.3s ease;
+  white-space: nowrap; max-width: 90vw;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* Tag pills */
+.tag { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; margin: 2px; }
+.tag-peak { background: var(--peak-bg); color: var(--peak); }
+.tag-low { background: var(--low-bg); color: var(--low); }
+.tag-warn { background: var(--warn-bg); color: #8b6233; }
+
+/* Timer */
+.timer-display {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 48px; text-align: center;
+  color: var(--text); margin: 20px 0;
+}
+.timer-sub { text-align: center; font-size: 13px; color: var(--text3); margin-bottom: 20px; }
+
+/* Empty state */
+.empty { text-align: center; padding: 40px 20px; color: var(--text3); }
+.empty-icon { font-size: 36px; margin-bottom: 12px; }
+.empty-text { font-size: 14px; }
+
+/* Section break */
+.section-break { 
+  display: flex; align-items: center; gap: 10px; 
+  margin: 16px 0 10px; 
+}
+.section-break-line { flex: 1; height: 1px; background: var(--border2); }
+.section-break-text { font-size: 11px; color: var(--text3); white-space: nowrap; font-weight: 500; }
+
+/* Scroll indicator */
+.scroll-hint { text-align: center; font-size: 11px; color: var(--text3); padding: 4px 0 8px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="main" id="mainScroll">
+    <div class="topbar">
+      <div class="topbar-title">
+        <span>我的节奏</span>
+        <span class="topbar-date" id="todayDate"></span>
+      </div>
+    </div>
+
+    <!-- TODAY PAGE -->
+    <div class="page active" id="page-today">
+      <div style="height:12px"></div>
+
+      <!-- Mode Banner -->
+      <div class="mode-banner" id="modeBanner" onclick="openModeSwitch()">
+        <div class="mode-label" id="modeLabel">当前模式</div>
+        <div class="mode-title" id="modeTitle">加载中...</div>
+        <div class="mode-sub" id="modeSub"></div>
+        <div class="mode-switch-hint">点击切换模式 →</div>
+      </div>
+
+      <!-- Today Checklist -->
+      <div class="card">
+        <div class="card-title">今天的最低任务</div>
+        <div id="checklistContainer"></div>
+      </div>
+
+      <!-- Quick Log -->
+      <div class="card">
+        <div class="card-title">快速记录</div>
+        <div class="quick-row">
+          <div class="quick-card" onclick="openModal('weight')">
+            <div class="quick-card-icon">⚖️</div>
+            <div class="quick-card-label">记录体重</div>
+          </div>
+          <div class="quick-card" onclick="openModal('exercise')">
+            <div class="quick-card-icon">🏃</div>
+            <div class="quick-card-label">运动记录</div>
+          </div>
+          <div class="quick-card" onclick="openModal('measure')">
+            <div class="quick-card-icon">📏</div>
+            <div class="quick-card-label">记录围度</div>
+          </div>
+          <div class="quick-card" onclick="openBingeHelper()">
+            <div class="quick-card-icon">💭</div>
+            <div class="quick-card-label">暴食感来了</div>
+          </div>
+        </div>
+        <button class="log-btn" onclick="openModal('binge')">
+          <span class="log-btn-icon">🌊</span>
+          <span class="log-btn-label">记录今天的饮食状态</span>
+          <span class="log-btn-arrow">›</span>
+        </button>
+      </div>
+
+      <!-- Today Summary -->
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleSummary()">
+          <span>今日小结</span>
+          <span id="summaryToggleIcon" style="font-size:16px;color:var(--text3);transition:transform 0.2s">▾</span>
+        </div>
+        <div id="todayProgress"></div>
+        <div id="todayDetails">
+          <div class="empty">
+            <div class="empty-icon">🌱</div>
+            <div class="empty-text">今天还没有记录，开始吧</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATA PAGE -->
+    <div class="page" id="page-data">
+      <div style="height:12px"></div>
+      <div class="stat-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-label">最新体重</div>
+          <div class="stat-value" id="latestWeight">—</div>
+          <div class="stat-change" id="weightChange"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">本周运动</div>
+          <div class="stat-value" id="weekExercise">0</div>
+          <div class="stat-unit">次</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">本月记录</div>
+          <div class="stat-value" id="monthLogs">0</div>
+          <div class="stat-unit">天</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">连续记录</div>
+          <div class="stat-value" id="streak">0</div>
+          <div class="stat-unit">天</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">体重趋势</div>
+        <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">围度变化</div>
+        <div class="chart-wrap"><canvas id="measureChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">运动记录</div>
+        <div id="exerciseLogList">
+          <div class="empty"><div class="empty-icon">🏃</div><div class="empty-text">还没有运动记录</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GUIDE PAGE -->
+    <div class="page" id="page-guide">
+      <div style="height:12px"></div>
+
+      <!-- Binge helper -->
+      <div class="card">
+        <div class="card-title">暴食冲动来了？10 分钟缓冲</div>
+        <div class="binge-step">
+          <div class="binge-num">1</div>
+          <div><div class="binge-text">先喝一大杯水或热饮</div><div class="binge-note">胃部填充感会降低冲动强度</div></div>
+        </div>
+        <div class="binge-step">
+          <div class="binge-num">2</div>
+          <div><div class="binge-text">等 10 分钟，做另一件事</div><div class="binge-note">走到另一个房间、洗个手、刷个视频</div></div>
+        </div>
+        <div class="binge-step">
+          <div class="binge-num">3</div>
+          <div><div class="binge-text">还想吃？先吃蛋白质垫一下</div><div class="binge-note">鸡蛋 / 毛豆 / 酸奶，很多时候之后就不想暴食了</div></div>
+        </div>
+        <div class="binge-step">
+          <div class="binge-num">4</div>
+          <div><div class="binge-text">如果真的暴食了</div><div class="binge-note">什么都不做，不惩罚，不节食，直接继续明天 →</div></div>
+        </div>
+        <button class="btn-primary" onclick="openModal('binge'); showToast('记录一下今天的状态')">暴食了，记录一下</button>
+      </div>
+
+      <!-- 防暴食储备 -->
+      <div class="card">
+        <div class="card-title">备好这些 — 替代暴食冲动</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+          <span class="tag tag-peak">🥒 黄瓜胡萝卜</span>
+          <span class="tag tag-peak">🍿 少油爆米花</span>
+          <span class="tag tag-peak">🫛 冷冻毛豆</span>
+          <span class="tag tag-warn">🍫 黑巧（少量）</span>
+          <span class="tag tag-warn">🍓 水果</span>
+          <span class="tag tag-low">🥛 热牛奶</span>
+          <span class="tag tag-low">🍵 热茶</span>
+          <span class="tag tag-low">🥚 水煮蛋</span>
+        </div>
+      </div>
+
+      <!-- Mode guide -->
+      <div class="section-break">
+        <div class="section-break-line"></div>
+        <div class="section-break-text">双模式指南</div>
+        <div class="section-break-line"></div>
+      </div>
+
+      <div class="card" style="border-left: 3px solid var(--peak);">
+        <div class="card-title" style="color:var(--peak)">⚡ 高峰模式 — 我有能量</div>
+        <div class="check-item" style="cursor:default"><div class="check-box" style="background:var(--peak);border-color:var(--peak)"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-content"><div class="check-label">16:8 断食（12-20 点进食）</div></div></div>
+        <div class="check-item" style="cursor:default"><div class="check-box" style="background:var(--peak);border-color:var(--peak)"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-content"><div class="check-label">运动 20 分钟以上</div></div></div>
+        <div class="check-item" style="cursor:default"><div class="check-box" style="background:var(--peak);border-color:var(--peak)"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-content"><div class="check-label">每餐优先吃蛋白质</div></div></div>
+        <div class="check-item" style="cursor:default"><div class="check-box" style="background:var(--peak);border-color:var(--peak)"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-content"><div class="check-label">睡前 1h 降低屏幕刺激</div></div></div>
+      </div>
+
+      <div class="card" style="border-left: 3px solid var(--low);">
+        <div class="card-title" style="color:var(--low)">🌙 低谷模式 — 能量不够</div>
+        <div class="check-item" style="cursor:default"><div class="check-box" style="background:var(--low);border-color:var(--low)"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-content"><div class="check-label">喝够水（只做这一件）</div></div></div>
+        <div class="check-item" style="cursor:default"><div class="check-box" style="background:var(--low);border-color:var(--low)"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-content"><div class="check-label">有蛋白质就行（任何来源）</div></div></div>
+        <div class="check-item" style="cursor:default"><div class="check-box" style="background:var(--low);border-color:var(--low)"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-content"><div class="check-label">不深夜暴食 = 今天赢了</div></div></div>
+        <div class="check-item" style="cursor:default"><div class="check-box" style="background:var(--low);border-color:var(--low)"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-content"><div class="check-label">运动可以是 5 分钟拉伸</div></div></div>
+      </div>
+
+      <div class="affirm-box">
+        <div class="affirm-text">你不是"懒"或"没有意志力"。<br>你的大脑只被意义感驱动，被能量成本限制。<br>低谷期守住底线，和高峰期推进一样有价值。</div>
+      </div>
+    </div>
+
+    <!-- HISTORY PAGE -->
+    <div class="page" id="page-history">
+      <div style="height:12px"></div>
+      <div class="card">
+        <div class="card-title">数据备份 / 迁移</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">导出后保存 JSON 文件，换设备时导入即可恢复所有记录。</p>
+        <div style="display:flex;gap:10px">
+          <button class="log-btn" style="flex:1;margin-bottom:0" onclick="exportData()">
+            <span class="log-btn-icon">📤</span>
+            <span class="log-btn-label">导出数据</span>
+          </button>
+          <button class="log-btn" style="flex:1;margin-bottom:0" onclick="document.getElementById('importFile').click()">
+            <span class="log-btn-icon">📥</span>
+            <span class="log-btn-label">导入数据</span>
+          </button>
+        </div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+        <div id="importStatus" style="margin-top:10px;font-size:13px;color:var(--peak);display:none"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">历史记录</div>
+        <div id="historyList">
+          <div class="empty"><div class="empty-icon">📖</div><div class="empty-text">还没有记录</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <nav class="nav">
+    <button class="nav-item active" onclick="switchPage('today', this)">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      今天
+    </button>
+    <button class="nav-item" onclick="switchPage('data', this)">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      数据
+    </button>
+    <button class="nav-item" onclick="switchPage('guide', this)">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+      指南
+    </button>
+    <button class="nav-item" onclick="switchPage('history', this)">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      历史
+    </button>
+  </nav>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modalBox">
+    <div class="modal-handle"></div>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ DATA STORAGE ============
+const DB = {
+  get(key) { try { return JSON.parse(localStorage.getItem('audhd_' + key) || 'null'); } catch { return null; } },
+  set(key, val) { localStorage.setItem('audhd_' + key, JSON.stringify(val)); },
+  push(key, item) {
+    const arr = this.get(key) || [];
+    arr.push({ ...item, id: Date.now(), date: new Date().toISOString() });
+    this.set(key, arr);
+    return arr;
+  }
+};
+
+// ============ STATE ============
+let currentMode = DB.get('mode') || 'peak';
+let weightChart = null;
+let measureChart = null;
+let checkedItems = DB.get('checkedToday') || {};
+const todayKey = new Date().toDateString();
+if (checkedItems._date !== todayKey) { checkedItems = { _date: todayKey }; DB.set('checkedToday', checkedItems); }
+
+// ============ CHECKLISTS ============
+const CHECKLISTS = {
+  peak: [
+    { id: 'water', label: '喝够水（目标 1.5L）', note: '起床第一杯，全天都备着' },
+    { id: 'protein', label: '每餐先吃蛋白质', note: '鸡蛋 / 豆腐 / 鸡胸 / 毛豆' },
+    { id: 'window', label: '保持进食窗口 12-20 点', note: '不用完美，尽量不深夜吃' },
+    { id: 'move', label: '运动 20 分钟以上', note: '任何形式都算' },
+    { id: 'sleep', label: '睡前 1h 切换低刺激内容', note: '降低屏幕亮度就行' },
+    { id: 'light', label: '起床后见自然光 5 分钟', note: '拉开窗帘坐着就够' },
+  ],
+  low: [
+    { id: 'water', label: '喝够水（哪怕 3 杯）', note: '这是今天唯一必须做的事' },
+    { id: 'protein', label: '今天有吃蛋白质就行', note: '任何来源，不要求完美' },
+    { id: 'nobinge', label: '不深夜（22点后）大量进食', note: '做到这条，今天就赢了' },
+    { id: 'wake', label: '固定时间起床', note: '作息锚点，哪怕其他都乱' },
+  ]
+};
+
+// ============ INIT ============
+function init() {
+  // Date
+  const now = new Date();
+  document.getElementById('todayDate').textContent = 
+    `${now.getMonth()+1}月${now.getDate()}日 ${['日','一','二','三','四','五','六'][now.getDay()]}`;
+  
+  renderMode();
+  renderChecklist();
+  renderTodaySummary();
+}
+
+function renderMode() {
+  const banner = document.getElementById('modeBanner');
+  const isPeak = currentMode === 'peak';
+  banner.className = 'mode-banner ' + (isPeak ? 'mode-peak-banner' : 'mode-low-banner');
+  document.getElementById('modeLabel').textContent = isPeak ? '⚡ 高峰模式' : '🌙 低谷模式';
+  document.getElementById('modeTitle').textContent = isPeak ? '今天我有能量' : '今天需要休养';
+  document.getElementById('modeSub').textContent = isPeak ? 
+    '推进期：按高峰清单认真执行' : 
+    '守住期：只做最低限度，低谷不是失败';
+}
+
+function renderChecklist() {
+  const items = CHECKLISTS[currentMode];
+  const container = document.getElementById('checklistContainer');
+  container.innerHTML = items.map(item => {
+    const done = checkedItems[item.id];
+    return `<div class="check-item ${done ? 'done' : ''}" onclick="toggleCheck('${item.id}', this)">
+      <div class="check-box">
+        <svg viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="2,6 5,9 10,3"/>
+        </svg>
+      </div>
+      <div class="check-content">
+        <div class="check-label">${item.label}</div>
+        <div class="check-note">${item.note}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCheck(id, el) {
+  checkedItems[id] = !checkedItems[id];
+  DB.set('checkedToday', checkedItems);
+  el.classList.toggle('done');
+  renderTodaySummary();
+}
+
+function renderTodaySummary() {
+  const items = CHECKLISTS[currentMode];
+  const done = items.filter(i => checkedItems[i.id]).length;
+  const total = items.length;
+  const pct = Math.round(done / total * 100);
+
+  // Progress bar — always visible
+  document.getElementById('todayProgress').innerHTML = `
+    <div style="margin-bottom:${summaryVisible?'12px':'0'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:13px;color:var(--text2)">任务完成</span>
+        <span style="font-size:13px;font-weight:500;color:var(--text)">${done}/${total}</span>
+      </div>
+      <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${currentMode==='peak'?'var(--peak)':'var(--low)'};border-radius:3px;transition:width 0.4s"></div>
+      </div>
+    </div>`;
+
+  // Detail logs — controlled by toggle
+  const logs = DB.get('logs') || [];
+  const todayLogs = logs.filter(l => new Date(l.date).toDateString() === todayKey);
+  const weight = DB.get('weights') || [];
+  const todayW = weight.find(w => new Date(w.date).toDateString() === todayKey);
+
+  let details = '';
+  if (todayW) {
+    details += `<div style="display:flex;gap:6px;align-items:center;padding:6px 0;font-size:13px;color:var(--text2)">
+      <span>⚖️</span><span>今日体重 <strong style="color:var(--text)">${todayW.value} kg</strong></span></div>`;
+  }
+  todayLogs.slice(-3).forEach(l => {
+    details += `<div style="display:flex;gap:6px;align-items:flex-start;padding:6px 0;font-size:13px;color:var(--text2)">
+      <span>${l.icon || '📝'}</span><span>${l.summary}</span></div>`;
+  });
+  if (done === total && total > 0) {
+    details += `<div style="margin-top:10px;padding:10px 12px;background:var(--peak-bg);border-radius:var(--radius-sm);font-size:13px;color:var(--peak)">
+      ✨ 今天全部完成了，太好了！</div>`;
+  }
+  if (!details) {
+    details = `<div class="empty" style="padding:12px 0 0"><div class="empty-text" style="font-size:13px;color:var(--text3)">今天还没有其他记录</div></div>`;
+  }
+
+  const detailEl = document.getElementById('todayDetails');
+  detailEl.innerHTML = details;
+  detailEl.style.display = summaryVisible ? '' : 'none';
+}
+
+// ============ MODALS ============
+function openModal(type) {
+  const overlay = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+  overlay.classList.add('open');
+  
+  if (type === 'weight') {
+    content.innerHTML = `
+      <div class="modal-title">记录体重</div>
+      <div class="modal-label">体重（kg）</div>
+      <input class="modal-input" id="inputWeight" type="number" step="0.1" placeholder="例：58.5" inputmode="decimal">
+      <div class="modal-label">体脂率（可选，%）</div>
+      <input class="modal-input" id="inputBodyfat" type="number" step="0.1" placeholder="例：28.5" inputmode="decimal">
+      <div class="modal-label">备注（可选）</div>
+      <input class="modal-input" id="inputWeightNote" placeholder="早上空腹 / 晚上等">
+      <button class="btn-primary" onclick="saveWeight()">保存</button>
+      <button class="btn-ghost" onclick="closeModal()">取消</button>`;
+  }
+  
+  else if (type === 'exercise') {
+    content.innerHTML = `
+      <div class="modal-title">运动记录 🏃</div>
+      <div class="modal-label">运动种类</div>
+      <select class="modal-select" id="inputExType">
+        <option>走路/散步</option><option>跑步</option><option>骑行</option>
+        <option>游泳</option><option>瑜伽/拉伸</option><option>力量训练</option>
+        <option>跳绳/跳操</option><option>椭圆仪</option>
+        <option>攀岩（岩馆）</option><option>攀岩（月亮板）</option>
+        <option>爬楼梯</option><option>其他</option>
+      </select>
+      <div class="modal-label">时长（分钟）</div>
+      <input class="modal-input" id="inputExDur" type="number" placeholder="例：30" inputmode="numeric">
+      <div class="modal-label">消耗（kcal，可选）</div>
+      <input class="modal-input" id="inputExCal" type="number" placeholder="如果有记录" inputmode="numeric">
+      <div class="modal-label">感受</div>
+      <div class="emoji-row" id="exMoodRow">
+        <button class="emoji-btn" onclick="selectEmoji(this,'exMood')">😊 很好</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'exMood')">😐 一般</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'exMood')">😓 累但值</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'exMood')">😩 很难熬</button>
+      </div>
+      <button class="btn-primary" onclick="saveExercise()">保存</button>
+      <button class="btn-ghost" onclick="closeModal()">取消</button>`;
+  }
+  
+  else if (type === 'measure') {
+    content.innerHTML = `
+      <div class="modal-title">围度记录 📏</div>
+      <div class="modal-label">腰围（cm，可选）</div>
+      <input class="modal-input" id="inputWaist" type="number" step="0.5" placeholder="例：72.5" inputmode="decimal">
+      <div class="modal-label">臀围（cm，可选）</div>
+      <input class="modal-input" id="inputHip" type="number" step="0.5" placeholder="例：96.0" inputmode="decimal">
+      <div class="modal-label">大腿围（cm，可选）</div>
+      <input class="modal-input" id="inputThigh" type="number" step="0.5" placeholder="例：55.0" inputmode="decimal">
+      <div class="modal-label">手臂围（cm，可选）</div>
+      <input class="modal-input" id="inputArm" type="number" step="0.5" placeholder="例：28.0" inputmode="decimal">
+      <button class="btn-primary" onclick="saveMeasure()">保存</button>
+      <button class="btn-ghost" onclick="closeModal()">取消</button>`;
+  }
+  
+  else if (type === 'binge') {
+    content.innerHTML = `
+      <div class="modal-title">饮食状态记录 🌊</div>
+      <div class="modal-label">今天饮食怎么样？</div>
+      <div class="emoji-row" id="bingeStateRow">
+        <button class="emoji-btn" onclick="selectEmoji(this,'bingeState')">✅ 很好</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'bingeState')">🟡 一般</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'bingeState')">🌊 有些暴食</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'bingeState')">💥 严重暴食</button>
+      </div>
+      <div class="modal-label">暴食了？</div>
+      <div style="background:var(--warn-bg);border-radius:var(--radius-sm);padding:12px;font-size:13px;color:#8b6233;line-height:1.6;margin-top:4px">
+        暴食不是道德失败。<br>你的大脑在找多巴胺，这是神经系统的反应，不是你的错。<br><strong>下一步：不惩罚，不节食补偿，明天正常开始。</strong>
+      </div>
+      <div class="modal-label" style="margin-top:14px">备注（可选，想写什么都行）</div>
+      <textarea class="modal-textarea" id="inputBingeNote" placeholder="今天发生了什么，或者只是记录一下..."></textarea>
+      <button class="btn-primary" onclick="saveBinge()">记录，然后放下它</button>
+      <button class="btn-ghost" onclick="closeModal()">取消</button>`;
+  }
+}
+
+function openBingeHelper() {
+  const overlay = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+  overlay.classList.add('open');
+  
+  let seconds = 600;
+  let timer = null;
+  
+  content.innerHTML = `
+    <div class="modal-title">暴食感来了？先暂停一下 💙</div>
+    <div class="timer-display" id="timerDisplay">10:00</div>
+    <div class="timer-sub">先喝一杯水，等这个计时器</div>
+    <div style="background:var(--peak-bg);border-radius:var(--radius-sm);padding:12px;font-size:13px;color:var(--peak);margin-bottom:16px">
+      冲动会在 10 分钟内自然下降。<br>现在去做一件别的事：走到另一个房间，洗个手，刷一个视频。
+    </div>
+    <button class="btn-primary" id="timerBtn" onclick="startTimer()">开始计时</button>
+    <button class="btn-ghost" onclick="openModal('binge')">我还是暴食了，记录一下</button>
+    <button class="btn-ghost" onclick="closeModal()">我缓过来了 ✨</button>`;
+  
+  window._timerSeconds = 600;
+  window._timerInterval = null;
+}
+
+window.startTimer = function() {
+  const btn = document.getElementById('timerBtn');
+  if (window._timerInterval) return;
+  btn.textContent = '计时中...';
+  btn.style.opacity = '0.6';
+  window._timerInterval = setInterval(() => {
+    window._timerSeconds--;
+    const m = Math.floor(window._timerSeconds / 60);
+    const s = window._timerSeconds % 60;
+    const el = document.getElementById('timerDisplay');
+    if (el) el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if (window._timerSeconds <= 0) {
+      clearInterval(window._timerInterval);
+      if (el) el.textContent = '✨';
+      if (btn) { btn.textContent = '时间到了！感觉怎么样？'; btn.style.opacity = '1'; }
+    }
+  }, 1000);
+};
+
+function openModeSwitch() {
+  const overlay = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+  overlay.classList.add('open');
+  content.innerHTML = `
+    <div class="modal-title">我现在的状态是？</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
+      <div onclick="setMode('peak')" style="padding:18px;border-radius:var(--radius);border:2px solid ${currentMode==='peak'?'var(--peak)':'var(--border)'};background:var(--peak-bg);cursor:pointer">
+        <div style="font-size:16px;font-weight:500;color:var(--peak);margin-bottom:6px">⚡ 高峰模式 — 我有能量</div>
+        <div style="font-size:13px;color:var(--text2)">感觉有意思、想动、脑子转得快<br>用这个状态多积累进步</div>
+      </div>
+      <div onclick="setMode('low')" style="padding:18px;border-radius:var(--radius);border:2px solid ${currentMode==='low'?'var(--low)':'var(--border)'};background:var(--low-bg);cursor:pointer">
+        <div style="font-size:16px;font-weight:500;color:var(--low);margin-bottom:6px">🌙 低谷模式 — 需要休养</div>
+        <div style="font-size:13px;color:var(--text2)">什么都不想做、启动困难、情绪低<br>切到低谷轨道，只守住底线就好</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:12px;background:var(--warn-bg);border-radius:var(--radius-sm);font-size:13px;color:#8b6233">
+      不要在低谷期用高峰期标准要求自己。这是 AuDHD 最常见的崩溃原因。
+    </div>
+    <button class="btn-ghost" style="margin-top:12px" onclick="closeModal()">取消</button>`;
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  DB.set('mode', mode);
+  closeModal();
+  renderMode();
+  renderChecklist();
+  showToast(mode === 'peak' ? '⚡ 切换到高峰模式' : '🌙 切换到低谷模式');
+}
+
+window.selectEmoji = function(btn, group) {
+  document.querySelectorAll(`#${group}Row .emoji-btn`).forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+};
+
+// ============ SAVE FUNCTIONS ============
+function saveWeight() {
+  const val = parseFloat(document.getElementById('inputWeight').value);
+  if (!val) { showToast('请输入体重数值'); return; }
+  const fat = parseFloat(document.getElementById('inputBodyfat').value) || null;
+  const note = document.getElementById('inputWeightNote').value;
+  DB.push('weights', { value: val, fat, note });
+  DB.push('logs', { icon: '⚖️', summary: `体重 ${val} kg${fat ? '，体脂 '+fat+'%' : ''}${note ? ' · '+note : ''}` });
+  closeModal();
+  showToast('✅ 体重已记录');
+  renderTodaySummary();
+  if (document.getElementById('page-data').classList.contains('active')) renderDataPage();
+}
+
+function saveExercise() {
+  const type = document.getElementById('inputExType').value;
+  const dur = parseInt(document.getElementById('inputExDur').value) || 0;
+  const cal = parseInt(document.getElementById('inputExCal').value) || null;
+  const moodBtn = document.querySelector('#exMoodRow .selected');
+  const mood = moodBtn ? moodBtn.textContent : '';
+  if (!dur) { showToast('请输入时长'); return; }
+  DB.push('exercises', { type, dur, cal, mood });
+  const summary = `${type} ${dur}分钟${cal ? ' · 消耗'+cal+'kcal' : ''}${mood ? ' · '+mood : ''}`;
+  DB.push('logs', { icon: '🏃', summary });
+  closeModal();
+  showToast('✅ 运动已记录');
+  checkedItems['move'] = true;
+  DB.set('checkedToday', checkedItems);
+  renderChecklist();
+  renderTodaySummary();
+}
+
+function saveMeasure() {
+  const waist = parseFloat(document.getElementById('inputWaist').value) || null;
+  const hip = parseFloat(document.getElementById('inputHip').value) || null;
+  const thigh = parseFloat(document.getElementById('inputThigh').value) || null;
+  const arm = parseFloat(document.getElementById('inputArm').value) || null;
+  if (!waist && !hip && !thigh && !arm) { showToast('请至少填写一项'); return; }
+  DB.push('measures', { waist, hip, thigh, arm });
+  const parts = [waist&&`腰${waist}`, hip&&`臀${hip}`, thigh&&`腿${thigh}`, arm&&`臂${arm}`].filter(Boolean);
+  DB.push('logs', { icon: '📏', summary: '围度记录 · ' + parts.join(' / ') + ' cm' });
+  closeModal();
+  showToast('✅ 围度已记录');
+  renderTodaySummary();
+}
+
+function saveBinge() {
+  const stateBtn = document.querySelector('#bingeStateRow .selected');
+  const state = stateBtn ? stateBtn.textContent : '已记录';
+  const note = document.getElementById('inputBingeNote').value;
+  DB.push('logs', { icon: '🌊', summary: `饮食状态：${state}${note ? ' · '+note : ''}` });
+  closeModal();
+  showToast('记录完成，放下它，继续前行 ✨');
+  renderTodaySummary();
+}
+
+// ============ MODAL UTILS ============
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modalOverlay')) return;
+  if (window._timerInterval) { clearInterval(window._timerInterval); window._timerInterval = null; }
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+// ============ PAGES ============
+function switchPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('mainScroll').scrollTop = 0;
+  if (name === 'data') renderDataPage();
+  if (name === 'history') renderHistory();
+}
+
+// ============ DATA PAGE ============
+function renderDataPage() {
+  const weights = DB.get('weights') || [];
+  const exercises = DB.get('exercises') || [];
+  const logs = DB.get('logs') || [];
+
+  // Stats
+  if (weights.length > 0) {
+    const latest = weights[weights.length - 1];
+    document.getElementById('latestWeight').textContent = latest.value;
+    if (weights.length > 1) {
+      const prev = weights[weights.length - 2];
+      const diff = (latest.value - prev.value).toFixed(1);
+      const el = document.getElementById('weightChange');
+      el.textContent = (diff > 0 ? '+' : '') + diff + ' kg';
+      el.className = 'stat-change ' + (diff > 0 ? 'up' : 'down');
+    }
+  }
+
+  const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 7);
+  const weekEx = exercises.filter(e => new Date(e.date) >= weekStart);
+  document.getElementById('weekExercise').textContent = weekEx.length;
+
+  const monthStart = new Date(); monthStart.setDate(1);
+  const monthDays = new Set(logs.filter(l => new Date(l.date) >= monthStart).map(l => new Date(l.date).toDateString()));
+  document.getElementById('monthLogs').textContent = monthDays.size;
+
+  // Streak
+  let streak = 0, d = new Date();
+  for (let i = 0; i < 60; i++) {
+    const key = new Date(d).toDateString();
+    if (logs.some(l => new Date(l.date).toDateString() === key)) { streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  document.getElementById('streak').textContent = streak;
+
+  // Weight chart
+  renderWeightChart(weights);
+  renderMeasureChart(DB.get('measures') || []);
+
+  // Exercise list
+  const exEl = document.getElementById('exerciseLogList');
+  if (exercises.length === 0) {
+    exEl.innerHTML = '<div class="empty"><div class="empty-icon">🏃</div><div class="empty-text">还没有运动记录</div></div>';
+  } else {
+    exEl.innerHTML = exercises.slice(-10).reverse().map(e => {
+      const d = new Date(e.date);
+      return `<div class="log-entry">
+        <div class="log-dot"></div>
+        <div>
+          <div class="log-entry-date">${d.getMonth()+1}/${d.getDate()}</div>
+          <div class="log-entry-text">${e.type} · ${e.dur}分钟${e.cal?' · '+e.cal+'kcal':''}${e.mood?' · '+e.mood:''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function renderWeightChart(weights) {
+  const ctx = document.getElementById('weightChart').getContext('2d');
+  if (weightChart) weightChart.destroy();
+  if (weights.length < 2) {
+    ctx.clearRect(0,0,400,200);
+    ctx.fillStyle = '#9b9088';
+    ctx.font = '14px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('记录 2 次以上体重后显示趋势', 200, 100);
+    return;
+  }
+  const labels = weights.slice(-30).map(w => {
+    const d = new Date(w.date); return `${d.getMonth()+1}/${d.getDate()}`;
+  });
+  const data = weights.slice(-30).map(w => w.value);
+  weightChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: '#8b6f5e',
+        backgroundColor: 'rgba(139,111,94,0.08)',
+        tension: 0.3, fill: true, pointRadius: 4,
+        pointBackgroundColor: '#8b6f5e', borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#9b9088' } },
+        y: { grid: { color: 'rgba(42,37,32,0.05)' }, ticks: { font: { size: 11 }, color: '#9b9088' } }
+      }
+    }
+  });
+}
+
+function renderMeasureChart(measures) {
+  const ctx = document.getElementById('measureChart').getContext('2d');
+  if (measureChart) measureChart.destroy();
+  if (measures.length < 2) {
+    ctx.clearRect(0,0,400,200);
+    ctx.fillStyle = '#9b9088';
+    ctx.font = '14px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('记录 2 次以上围度后显示趋势', 200, 100);
+    return;
+  }
+  const labels = measures.slice(-12).map(m => {
+    const d = new Date(m.date); return `${d.getMonth()+1}/${d.getDate()}`;
+  });
+  const datasets = [
+    { label: '腰', key: 'waist', color: '#4a7c6f' },
+    { label: '臀', key: 'hip', color: '#8b6f5e' },
+    { label: '腿', key: 'thigh', color: '#c4956a' },
+  ].filter(d => measures.some(m => m[d.key])).map(d => ({
+    label: d.label,
+    data: measures.slice(-12).map(m => m[d.key] || null),
+    borderColor: d.color, backgroundColor: 'transparent',
+    tension: 0.3, pointRadius: 3, borderWidth: 2,
+    spanGaps: true,
+  }));
+  measureChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { font: { size: 11 }, color: '#6b6158', boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#9b9088' } },
+        y: { grid: { color: 'rgba(42,37,32,0.05)' }, ticks: { font: { size: 11 }, color: '#9b9088' } }
+      }
+    }
+  });
+}
+
+// ============ HISTORY PAGE ============
+function renderHistory() {
+  const logs = DB.get('logs') || [];
+  const el = document.getElementById('historyList');
+  if (logs.length === 0) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📖</div><div class="empty-text">还没有记录</div></div>';
+    return;
+  }
+  el.innerHTML = logs.slice().reverse().slice(0, 60).map(l => {
+    const d = new Date(l.date);
+    const dateStr = `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `<div class="log-entry">
+      <div class="log-dot"></div>
+      <div>
+        <div class="log-entry-date">${dateStr}</div>
+        <div class="log-entry-text">${l.icon||'📝'} ${l.summary}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============ TOAST ============
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ============ REMINDERS ============
+function checkReminders() {
+  const now = new Date();
+  const h = now.getHours();
+  const exercises = DB.get('exercises') || [];
+  const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 7);
+  const weekEx = exercises.filter(e => new Date(e.date) >= weekStart);
+  
+  if (h === 20 && weekEx.length < 3) {
+    showToast('🏃 本周运动 ' + weekEx.length + '/3 次，还有机会！');
+  }
+  if (h === 20) {
+    const weights = DB.get('weights') || [];
+    const today = new Date().toDateString();
+    if (!weights.some(w => new Date(w.date).toDateString() === today)) {
+      setTimeout(() => showToast('⚖️ 今天还没记体重，要记录吗？'), 3000);
+    }
+  }
+}
+
+// ============ SUMMARY TOGGLE ============
+let summaryVisible = DB.get('summaryVisible') !== false;
+
+function toggleSummary() {
+  summaryVisible = !summaryVisible;
+  DB.set('summaryVisible', summaryVisible);
+  const icon = document.getElementById('summaryToggleIcon');
+  icon.style.transform = summaryVisible ? '' : 'rotate(-90deg)';
+  renderTodaySummary();
+}
+
+function applySummaryState() {
+  const icon = document.getElementById('summaryToggleIcon');
+  if (!summaryVisible) icon.style.transform = 'rotate(-90deg)';
+}
+
+// ============ EXPORT / IMPORT ============
+function exportData() {
+  const keys = ['mode','weights','exercises','measures','logs','checkedToday'];
+  const data = {};
+  keys.forEach(k => { const v = DB.get(k); if (v !== null) data[k] = v; });
+  data._exportedAt = new Date().toISOString();
+  data._version = 1;
+  
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = 'audhd-data-' + dateStr + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ 数据已导出，记得保存文件');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data._version) throw new Error('格式不对');
+      const keys = ['mode','weights','exercises','measures','logs'];
+      let count = 0;
+      keys.forEach(k => {
+        if (data[k] !== undefined) { DB.set(k, data[k]); count++; }
+      });
+      const status = document.getElementById('importStatus');
+      status.style.display = 'block';
+      status.textContent = '✅ 导入成功！共恢复 ' + count + ' 类数据。刷新页面生效。';
+      showToast('✅ 数据导入成功！');
+      setTimeout(() => location.reload(), 1800);
+    } catch(err) {
+      const status = document.getElementById('importStatus');
+      status.style.display = 'block';
+      status.style.color = 'var(--danger)';
+      status.textContent = '❌ 导入失败：文件格式不正确，请使用本 App 导出的文件';
+      showToast('❌ 导入失败，请检查文件');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ============ START ============
+init();
+applySummaryState();
+checkReminders();
+setInterval(checkReminders, 60 * 60 * 1000);
+
+// Add sample data hint on first load
+if (!DB.get('_onboarded')) {
+  DB.set('_onboarded', true);
+  setTimeout(() => showToast('👋 先设置今天的状态模式吧'), 1000);
+}
+</script>
+</body>
+</html>
