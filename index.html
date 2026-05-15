@@ -290,7 +290,22 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);font-size:15px;line-heig
         </div>
         <div class="data-section active" id="dsWeight"><div class="chart-wrap"><canvas id="weightChart"></canvas></div></div>
         <div class="data-section" id="dsMeasure"><div class="chart-wrap"><canvas id="measureChart"></canvas></div></div>
-        <div class="data-section" id="dsEnergy"><div class="chart-wrap"><canvas id="energyChart"></canvas><div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:14px"><span style="color:var(--peak)">■ 高峰（手动切换）</span><span style="color:var(--low)">■ 低谷（手动切换）</span></div></div></div>
+        <div class="data-section" id="dsEnergy">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--text3)">显示天数</span>
+            <div style="display:flex;gap:4px;align-items:center">
+              <button onclick="energyZoom(-1)" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--surface);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2)">−</button>
+              <span id="energyDaysLabel" style="font-size:12px;color:var(--text);font-weight:500;min-width:32px;text-align:center">1天</span>
+              <button onclick="energyZoom(1)" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--surface);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2)">+</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+            <canvas id="energyChart"></canvas>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:14px;flex-wrap:wrap">
+            <span style="color:var(--peak)">■ 高峰时段</span><span style="color:var(--low)">■ 低谷时段</span><span>— 能量趋势线</span>
+          </div>
+        </div>
         <div class="data-section" id="dsCombined">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--text3)">显示天数</span>
@@ -304,11 +319,11 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);font-size:15px;line-heig
     <canvas id="combinedChart" style="min-width:320px"></canvas>
   </div>
   <div style="font-size:11px;color:var(--text3);margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;line-height:1.8">
-    <span>🟧 进食窗口</span><span>🟩 空腹段</span><span>● 体重记录时刻</span>
-    <span style="color:var(--peak)">▬ 体重折线</span>
+    <span style="color:#c0392b">▮ 体重减少</span><span style="color:#27ae60">▮ 体重增加</span>
     <span style="color:var(--peak)">■ 高峰为主</span><span style="color:var(--low)">■ 低谷为主</span>
+    <span style="color:#c4956a">▬ 5日均线</span>
   </div>
-  <div style="font-size:11px;color:var(--text3);margin-top:2px">上半：0–24h 时间段；下半：K线=当天能量综合，折线=每日末次体重</div>
+  <div style="font-size:11px;color:var(--text3);margin-top:2px">蜡烛=昨天空腹→今天空腹，影线=当日最高/低，填充色=当天高峰/低谷占比</div>
 </div>
       </div>
 
@@ -465,7 +480,7 @@ function dateKeyFromStr(s){return new Date(s).toDateString()}
 // ── STATE ─────────────────────────────────────────────────
 let currentMode=DB.get('mode')||'peak';
 let summaryVisible=DB.get('summaryVisible')!==false;
-let wChart=null,mChart=null,eChart=null,cChart=null;
+let wChart=null,mChart=null;
 const todayKey=new Date().toDateString();
 let checkedItems=DB.get('checkedToday')||{};
 if(checkedItems._date!==todayKey){checkedItems={_date:todayKey};DB.set('checkedToday',checkedItems)}
@@ -624,11 +639,12 @@ function peekMode(m){
   showToast('👁 预览'+( m==='peak'?'高峰':'低谷')+'要求，未记录');
 }
 function exitPeek(){
-  // 从 peek 切回原状态，完全静默
+  // 从 peek 切回原状态，完全静默，不提示不记录
   if(_peekOrigMode!==null){
     currentMode=_peekOrigMode;
     _peekOrigMode=null;
     renderMode();renderChecklist();
+    // 静默切回，不showToast，不调用setMode
   }
 }
 function setMode(m){
@@ -1090,6 +1106,11 @@ function switchDataTab(name,btn){
   document.querySelectorAll('.data-section').forEach(s=>s.classList.remove('active'));
   document.getElementById('ds'+name.charAt(0).toUpperCase()+name.slice(1)).classList.add('active');
   if(name==='combined')renderCombinedChart();
+  if(name==='energy'){
+    const lbl=document.getElementById('energyDaysLabel');
+    if(lbl)lbl.textContent=energyViewDays+'天';
+    renderEnergyChart();
+  }
 }
 function switchRecordTab(name,btn){
   currentRecordFilter=name;
@@ -1135,42 +1156,168 @@ function renderMeasureChart(measures){
   const ds=[{label:'腰',key:'waist',color:'#4a7c6f'},{label:'臀',key:'hip',color:'#8b6f5e'},{label:'腿',key:'thigh',color:'#c4956a'}].filter(d=>data.some(m=>m[d.key])).map(d=>({label:d.label,data:data.map(m=>m[d.key]||null),borderColor:d.color,backgroundColor:'transparent',tension:0.3,pointRadius:3,borderWidth:2,spanGaps:true}));
   mChart=new Chart(ctx,{type:'line',data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},color:'#6b6158',boxWidth:12,padding:8}}},scales:{x:{grid:{display:false},ticks:{font:{size:11},color:'#9b9088'}},y:{grid:{color:'rgba(42,37,32,0.05)'},ticks:{font:{size:11},color:'#9b9088'}}}}});
 }
+let energyViewDays=1;
+const ENERGY_ZOOM_STEPS=[1,2,7,14];
+function energyZoom(dir){
+  const idx=ENERGY_ZOOM_STEPS.indexOf(energyViewDays);
+  const next=idx+dir;
+  if(next<0||next>=ENERGY_ZOOM_STEPS.length)return;
+  energyViewDays=ENERGY_ZOOM_STEPS[next];
+  document.getElementById('energyDaysLabel').textContent=energyViewDays+'天';
+  renderEnergyChart();
+}
+
 function renderEnergyChart(){
-  const ctx=document.getElementById('energyChart').getContext('2d');
-  if(eChart)eChart.destroy();
-  const events=(DB.get('energyEvents')||[]).filter(e=>!e.auto); // 只看手动切换，不含自动标记
-  if(events.length<1){noDataMsg(ctx,'手动切换模式后这里会显示你的能量波动');return}
-  const cut=new Date();cut.setDate(cut.getDate()-30);
-  // 按时间排序，构建折线点：每次切换 = 一个折线点
-  const pts=events
-    .filter(e=>new Date(e.date)>=cut)
-    .sort((a,b)=>new Date(a.date)-new Date(b.date))
-    .map(e=>({
-      x: dateLabel(new Date(e.date))+' '+String(new Date(e.date).getHours()).padStart(2,'0')+'h',
-      y: e.mode==='peak'?80:30,
-      mode: e.mode
-    }));
-  if(pts.length<1){noDataMsg(ctx,'手动切换模式后这里会显示你的能量波动');return}
-  const labels=pts.map(p=>p.x);
-  const values=pts.map(p=>p.y);
-  const colors=pts.map(p=>p.mode==='peak'?'rgba(74,124,111,0.85)':'rgba(139,111,94,0.75)');
-  eChart=new Chart(ctx,{
-    type:'bar',
-    data:{labels,datasets:[{
-      data:values,backgroundColor:colors,borderRadius:4,borderSkipped:false,
-      borderColor:pts.map(p=>p.mode==='peak'?'#4a7c6f':'#8b6f5e'),borderWidth:1
-    }]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{label:p=>p.raw===80?'⚡ 高峰':'🌙 低谷'}}
-      },
-      scales:{
-        x:{grid:{display:false},ticks:{font:{size:9},color:'#9b9088',maxRotation:45}},
-        y:{min:0,max:100,display:false}
-      }
+  const canvas=document.getElementById('energyChart');
+  if(!canvas)return;
+  // 只使用手动切换的事件
+  const allEvents=(DB.get('energyEvents')||[]).filter(e=>!e.auto)
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  const ctx=canvas.getContext('2d');
+  if(allEvents.length<1){
+    canvas.width=320;canvas.height=120;canvas.style.width='320px';canvas.style.height='120px';
+    ctx.clearRect(0,0,320,120);ctx.fillStyle='#9b9088';ctx.font='13px sans-serif';ctx.textAlign='center';
+    ctx.fillText('手动切换模式后这里会显示能量波动',160,60);return;
+  }
+
+  const days=energyViewDays;
+  const dpr=window.devicePixelRatio||1;
+  const containerW=canvas.parentElement?.clientWidth||320;
+  // 每天显示宽度
+  const dayW=Math.max(60,Math.floor((containerW-48)/days));
+  const canvasW=Math.max(containerW,48+dayW*days);
+  const topPad=8,botPad=28,chartH=100,labelH=20;
+  const canvasH=topPad+chartH+botPad;
+  const leftPad=8,rightPad=8;
+
+  canvas.width=canvasW*dpr;canvas.height=canvasH*dpr;
+  canvas.style.width=canvasW+'px';canvas.style.height=canvasH+'px';
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,canvasW,canvasH);
+
+  // 峰值/低谷 Y 位置
+  const peakY=topPad+chartH*0.10; // 高峰区块顶
+  const peakBot=topPad+chartH*0.45; // 高峰区块底
+  const lowTop=topPad+chartH*0.55;  // 低谷区块顶
+  const lowBot=topPad+chartH*0.90;  // 低谷区块底
+
+  // 遍历每一天
+  const now=new Date();
+  const trendPts=[]; // 用于折线（每个方块顶部中心）
+
+  for(let di=0;di<days;di++){
+    const dayDate=new Date(now);
+    dayDate.setDate(dayDate.getDate()-(days-1-di));
+    dayDate.setHours(0,0,0,0);
+    const dayEnd=new Date(dayDate);dayEnd.setHours(23,59,59,999);
+
+    const dayX=leftPad+di*dayW;
+
+    // 当天的能量事件（仅手动），排序
+    const dayEvts=allEvents.filter(e=>{const d=new Date(e.date);return d>=dayDate&&d<=dayEnd;});
+
+    // 在今天范围内，从00:00开始，以上一个有效事件为"当前状态"
+    // 找到这一天开始前的最后一个事件，作为当天0点起始状态
+    const prevEvts=allEvents.filter(e=>new Date(e.date)<dayDate);
+    let startMode=prevEvts.length>0?prevEvts[prevEvts.length-1].mode:null;
+
+    // 构建 [startMin, endMin, mode] 的时间段列表
+    const segs=[];
+    let cursor=0; // 分钟，0=当天00:00
+    const dayTotalMin=1440;
+
+    // 如果有起始状态
+    const allDayEvtsSorted=[...dayEvts].sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+    if(startMode){
+      // 从0到第一个事件之前
+      const firstEvtMin=allDayEvtsSorted.length>0
+        ? new Date(allDayEvtsSorted[0].date).getHours()*60+new Date(allDayEvtsSorted[0].date).getMinutes()
+        : dayTotalMin;
+      if(firstEvtMin>0) segs.push({start:0,end:firstEvtMin,mode:startMode});
     }
+    allDayEvtsSorted.forEach((ev,idx)=>{
+      const tStart=new Date(ev.date).getHours()*60+new Date(ev.date).getMinutes();
+      const tEnd=idx+1<allDayEvtsSorted.length
+        ? new Date(allDayEvtsSorted[idx+1].date).getHours()*60+new Date(allDayEvtsSorted[idx+1].date).getMinutes()
+        : dayTotalMin;
+      segs.push({start:tStart,end:tEnd,mode:ev.mode});
+    });
+
+    // 绘制各时间段方块
+    segs.forEach(seg=>{
+      const xStart=dayX+(seg.start/dayTotalMin)*dayW;
+      const xEnd=dayX+(seg.end/dayTotalMin)*dayW;
+      const bw=Math.max(1,xEnd-xStart-0.5);
+      const isPeak=seg.mode==='peak';
+      const bTop=isPeak?peakY:lowTop;
+      const bBot=isPeak?peakBot:lowBot;
+      ctx.fillStyle=isPeak?'rgba(74,124,111,0.75)':'rgba(139,111,94,0.65)';
+      ctx.fillRect(xStart,bTop,bw,bBot-bTop);
+    });
+
+    // 计算当天主要模式（用于折线点Y）：取最后一个事件的模式或均值
+    if(segs.length>0){
+      // 找主导模式
+      let peakSec=0,lowSec=0;
+      segs.forEach(s=>{const dur=s.end-s.start;if(s.mode==='peak')peakSec+=dur;else lowSec+=dur;});
+      const domMode=peakSec>=lowSec?'peak':'low';
+      const midX=dayX+dayW/2;
+      const midY=domMode==='peak'?(peakY+peakBot)/2:(lowTop+lowBot)/2;
+      trendPts.push({x:midX,y:midY,has:true});
+    } else {
+      trendPts.push({x:dayX+dayW/2,y:null,has:false});
+    }
+
+    // 时间轴分割线
+    if(di>0){
+      ctx.strokeStyle='rgba(42,37,32,0.08)';ctx.lineWidth=0.5;
+      ctx.beginPath();ctx.moveTo(dayX,topPad);ctx.lineTo(dayX,topPad+chartH);ctx.stroke();
+    }
+
+    // 日期标签
+    const lbl=days===1
+      ? ['00','06','12','18','24'].map((h,hi)=>{
+          ctx.font='8px -apple-system,sans-serif';ctx.fillStyle='#9b9088';ctx.textAlign='center';
+          const hx=dayX+(parseInt(h)/24)*dayW;
+          ctx.fillText(h+'h',hx,topPad+chartH+18);
+        }) && ''
+      : (()=>{
+          ctx.font='8.5px -apple-system,sans-serif';ctx.fillStyle='#9b9088';ctx.textAlign='center';
+          ctx.fillText(`${dayDate.getMonth()+1}/${dayDate.getDate()}`,dayX+dayW/2,topPad+chartH+18);
+          return '';
+        })();
+    if(days===1){
+      // 已在上面画了时间标签
+    }
+  }
+  // 如果是单天，补上最左和中间的小时标注（已在上方循环内处理）
+
+  // 折线：连接各天中心点
+  ctx.strokeStyle='rgba(42,37,32,0.5)';ctx.lineWidth=1.5;ctx.lineJoin='round';
+  ctx.setLineDash([3,3]);
+  let lineStarted=false;
+  ctx.beginPath();
+  trendPts.forEach(pt=>{
+    if(!pt.has){lineStarted=false;return;}
+    if(!lineStarted){ctx.moveTo(pt.x,pt.y);lineStarted=true;}
+    else ctx.lineTo(pt.x,pt.y);
   });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 折线点
+  trendPts.forEach(pt=>{
+    if(!pt.has)return;
+    ctx.beginPath();ctx.arc(pt.x,pt.y,2.5,0,Math.PI*2);
+    ctx.fillStyle='rgba(42,37,32,0.6)';ctx.fill();
+  });
+
+  // 高峰/低谷标注
+  ctx.font='8px -apple-system,sans-serif';ctx.textAlign='left';
+  ctx.fillStyle='#4a7c6f';ctx.fillText('⚡',2,(peakY+peakBot)/2+3);
+  ctx.fillStyle='#8b6f5e';ctx.fillText('🌙',2,(lowTop+lowBot)/2+3);
 }
 let combinedDays=7;
 function setCombinedDays(n,btn){
@@ -1185,7 +1332,8 @@ function renderCombinedChart(){
   if(!canvas)return;
   const weights=DB.get('weights')||[];
   const fasting=DB.get('fasting')||{};
-  const energyEvents=(DB.get('energyEvents')||[]).filter(e=>!e.auto);
+  const energyEvents=(DB.get('energyEvents')||[]).filter(e=>!e.auto)
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
   const days=combinedDays||7;
 
   // ── 每天数据 ──
@@ -1194,168 +1342,186 @@ function renderCombinedChart(){
     const d=new Date();d.setDate(d.getDate()-i);d.setHours(0,0,0,0);
     const k=d.toDateString();
     const tf=fasting[k]||{};
-    const dayWeights=weights.filter(w=>new Date(w.date).toDateString()===k);
-    // 能量事件：计算高峰/低谷占比 → K线颜色
+    const dayWeights=weights.filter(w=>new Date(w.date).toDateString()===k)
+      .sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+    // 能量事件：计算高峰/低谷占时间
     const dayEvts=energyEvents.filter(e=>new Date(e.date).toDateString()===k)
       .sort((a,b)=>new Date(a.date)-new Date(b.date));
-    // 计算加权时长：相邻两事件之间的分钟数归属到前者模式
+    // 找当天0点前的最后一个事件，作为当天起始状态
+    const prevEvts=energyEvents.filter(e=>new Date(e.date)<d);
+    const startMode=prevEvts.length>0?prevEvts[prevEvts.length-1].mode:null;
+
     let peakMin=0,lowMin=0;
-    if(dayEvts.length>0){
-      for(let j=0;j<dayEvts.length;j++){
-        const ev=dayEvts[j];
-        const tStart=new Date(ev.date).getHours()*60+new Date(ev.date).getMinutes();
-        const tEnd=j+1<dayEvts.length
-          ? new Date(dayEvts[j+1].date).getHours()*60+new Date(dayEvts[j+1].date).getMinutes()
-          : 1440;
-        const dur=Math.max(0,tEnd-tStart);
-        if(ev.mode==='peak') peakMin+=dur; else lowMin+=dur;
-      }
+    const allDaySrc=[];
+    if(startMode){
+      const firstMin=dayEvts.length>0
+        ? new Date(dayEvts[0].date).getHours()*60+new Date(dayEvts[0].date).getMinutes() : 1440;
+      allDaySrc.push({mode:startMode,min:0,endMin:firstMin});
     }
-    const energyMode=dayEvts.length===0?null:(peakMin>=lowMin?'peak':'low');
-    // 体重：昨天最后一条 = "开盘"，今天最后一条 = "收盘"
-    const sortedW=dayWeights.sort((a,b)=>new Date(a.date)-new Date(b.date));
+    dayEvts.forEach((ev,idx)=>{
+      const tS=new Date(ev.date).getHours()*60+new Date(ev.date).getMinutes();
+      const tE=idx+1<dayEvts.length
+        ? new Date(dayEvts[idx+1].date).getHours()*60+new Date(dayEvts[idx+1].date).getMinutes() : 1440;
+      allDaySrc.push({mode:ev.mode,min:tS,endMin:tE});
+    });
+    allDaySrc.forEach(s=>{const dur=s.endMin-s.min;if(s.mode==='peak')peakMin+=dur;else lowMin+=dur;});
+
+    const energyMode=(peakMin===0&&lowMin===0)?null:(peakMin>=lowMin?'peak':'low');
+
+    // K线逻辑：
+    // open = 昨天的空腹体重（即这一天的第一条体重记录，对应昨天的操作效果）
+    // close = 今天空腹体重 = 明天这个字段的open，但对于当天来说就是今天的第一条体重
+    // 实际上按照用户描述：
+    // "昨天的体重"=昨天的开盘，"今天的体重"=昨天的收盘
+    // 也就是说，每天K线的 open=该天第一条体重，close=次日第一条体重
+    // 但数据是按天存储的，所以我们用：
+    // open = 当天第一条体重（昨天操作的结果，今早空腹）
+    // close = 次日第一条体重（今天操作的结果，明早空腹）
+    // 当次日数据不存在时，close暂时不画
+
+    const firstW=dayWeights.length>0?dayWeights[0].value:null;
+    const lastW=dayWeights.length>0?dayWeights[dayWeights.length-1].value:null;
+    const allVals=dayWeights.map(w=>w.value);
+    const highW=allVals.length?Math.max(...allVals):null;
+    const lowW=allVals.length?Math.min(...allVals):null;
+
     dayData.push({
-      date:d, label:dateLabel(d), k,
+      date:d, label:`${d.getMonth()+1}/${d.getDate()}`, k,
       firstMeal:tf.firstMeal||null,
       lastMeal:tf.lastMeal||null,
       windowHours:tf.windowHours||8,
-      weights:sortedW.map(w=>({
+      weights:dayWeights.map(w=>({
         min:new Date(w.date).getHours()*60+new Date(w.date).getMinutes(),
         val:w.value
       })),
-      lastWeight:sortedW.length?sortedW[sortedW.length-1].value:null,
-      energyMode,  // 'peak'|'low'|null
+      openW:firstW,  // 当天第一条体重（今早空腹）
+      closeW:null,   // 填入下一天的第一条体重
+      highW, lowW,
+      lastWeight:lastW,
+      energyMode,
       peakMin, lowMin,
       energyEvts:dayEvts
     });
   }
 
-  // ── Canvas ──
+  // 填入 closeW：每天的close = 次日的open
+  for(let i=0;i<dayData.length-1;i++){
+    dayData[i].closeW=dayData[i+1].openW;
+  }
+  // 最后一天的close = 当天lastWeight（今天还未结束）
+  if(dayData.length>0){
+    const last=dayData[dayData.length-1];
+    if(last.closeW===null) last.closeW=last.lastWeight;
+  }
+
+  // 5日均线（每天取过去5天有openW的平均值）
+  const ma5=dayData.map((_,idx)=>{
+    const window=[];
+    for(let j=Math.max(0,idx-4);j<=idx;j++){
+      if(dayData[j].openW!==null)window.push(dayData[j].openW);
+    }
+    return window.length>0?window.reduce((a,b)=>a+b,0)/window.length:null;
+  });
+
+  // ── Canvas 绘制 ──
   const dpr=window.devicePixelRatio||1;
   const minColW=44;
   const containerW=canvas.parentElement.clientWidth||320;
-  const colW=Math.max(minColW, Math.floor((containerW-52)/days));
+  const colW=Math.max(minColW,Math.floor((containerW-52)/days));
   const canvasW=52+colW*days;
-  // 双区高度：上方时间轴（进食/空腹）+ 下方K线+体重
-  const timeH=180, kH=80, gap=8, botPad=24, topPad=10;
-  const canvasH=topPad+timeH+gap+kH+botPad;
-  canvas.width=canvasW*dpr; canvas.height=canvasH*dpr;
-  canvas.style.width=canvasW+'px'; canvas.style.height=canvasH+'px';
+  const kH=220,botPad=28,topPad=16;
+  const canvasH=topPad+kH+botPad;
+  canvas.width=canvasW*dpr;canvas.height=canvasH*dpr;
+  canvas.style.width=canvasW+'px';canvas.style.height=canvasH+'px';
   const ctx=canvas.getContext('2d');
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,canvasW,canvasH);
 
   const leftPad=46;
 
-  // ── 上半：24h 时间轴 ──
-  function minToY(min){ return topPad+(min/1440)*timeH; }
+  // ── K线蜡烛图 + 5日均线 ──
+  const kTop=topPad;
+  const kBot=topPad+kH;
 
-  // 横格线
-  [0,4,8,12,16,20,24].forEach(h=>{
-    const y=minToY(h*60);
-    ctx.strokeStyle='rgba(42,37,32,0.06)';ctx.lineWidth=0.5;
-    ctx.beginPath();ctx.moveTo(leftPad,y);ctx.lineTo(canvasW-2,y);ctx.stroke();
-    ctx.font='8px -apple-system,sans-serif';ctx.fillStyle='#b0a89e';ctx.textAlign='right';
-    ctx.fillText(h+'h',leftPad-4,y+3);
-  });
-
-  // 每列：进食/空腹段
-  dayData.forEach((day,i)=>{
-    const cx=leftPad+i*colW;
-    const cw=colW-3;
-    if(day.firstMeal){
-      const fm=t2m(day.firstMeal);
-      const lm=day.lastMeal?t2m(day.lastMeal):Math.min(fm+day.windowHours*60,1440);
-      const eatEnd=Math.min(lm,1440);
-      // 空腹：0~fm
-      if(fm>0){
-        ctx.fillStyle='rgba(74,124,111,0.14)';
-        ctx.fillRect(cx+1,minToY(0),cw,minToY(fm)-minToY(0));
-      }
-      // 进食：fm~eatEnd
-      ctx.fillStyle='rgba(196,149,106,0.25)';
-      ctx.fillRect(cx+1,minToY(fm),cw,Math.max(2,minToY(eatEnd)-minToY(fm)));
-      // 边框
-      ctx.strokeStyle='rgba(196,149,106,0.5)';ctx.lineWidth=0.8;
-      ctx.strokeRect(cx+1,minToY(fm),cw,Math.max(2,minToY(eatEnd)-minToY(fm)));
-      // 空腹：eatEnd~24
-      if(eatEnd<1440){
-        ctx.fillStyle='rgba(74,124,111,0.14)';
-        ctx.fillRect(cx+1,minToY(eatEnd),cw,minToY(1440)-minToY(eatEnd));
-      }
-    }
-    // 体重点（在时间轴上按记录时刻标注）
-    day.weights.forEach(w=>{
-      const y=minToY(w.min);
-      ctx.beginPath();ctx.arc(cx+cw/2+1,y,3.5,0,Math.PI*2);
-      ctx.fillStyle='#8b6f5e';ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,0.9)';ctx.lineWidth=1.2;ctx.stroke();
-      ctx.font='7.5px -apple-system,sans-serif';ctx.fillStyle='#6b6158';ctx.textAlign='center';
-      ctx.fillText(w.val,cx+cw/2+1,y-6);
-    });
-  });
-
-  // ── 下半：K线 + 体重折线 ──
-  const kTop=topPad+timeH+gap;
-  const kBot=kTop+kH;
-
-  // 计算体重 Y 轴范围
-  const allW=dayData.flatMap(d=>d.weights.map(w=>w.val)).filter(v=>v!=null);
-  const wMin=allW.length?Math.min(...allW)-0.5:60;
-  const wMax=allW.length?Math.max(...allW)+0.5:80;
-  function wToY(v){ return kBot-((v-wMin)/(wMax-wMin||1))*kH; }
+  // 计算体重 Y 轴范围（包含所有open/close/high/low）
+  const allWVals=dayData.flatMap(d=>[d.openW,d.closeW,d.highW,d.lowW]).filter(v=>v!=null);
+  const wPad=allWVals.length?0.5:5;
+  const wMin=allWVals.length?Math.min(...allWVals)-wPad:60;
+  const wMax=allWVals.length?Math.max(...allWVals)+wPad:80;
+  function wToY(v){return kBot-((v-wMin)/(wMax-wMin||1))*kH;}
 
   // 纵轴标注
   ctx.font='8px -apple-system,sans-serif';ctx.fillStyle='#b0a89e';ctx.textAlign='right';
-  [wMin+0.5,wMax-0.5].forEach(v=>{
-    ctx.fillText(v.toFixed(1),leftPad-4,wToY(v)+3);
-  });
+  const yTicks=[wMin+wPad, (wMin+wMax)/2, wMax-wPad];
+  yTicks.forEach(v=>{ctx.fillText(v.toFixed(1),leftPad-4,wToY(v)+3);});
+
   // 横格线下半
   ctx.strokeStyle='rgba(42,37,32,0.06)';ctx.lineWidth=0.5;
-  ctx.beginPath();ctx.moveTo(leftPad,kTop);ctx.lineTo(canvasW-2,kTop);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(leftPad,kBot);ctx.lineTo(canvasW-2,kBot);ctx.stroke();
+  [kTop,(kTop+kBot)/2,kBot].forEach(y=>{ctx.beginPath();ctx.moveTo(leftPad,y);ctx.lineTo(canvasW-2,y);ctx.stroke();});
 
-  // K线柱（每天能量综合）
+  // ── K线蜡烛图 ──
   dayData.forEach((day,i)=>{
     const cx=leftPad+i*colW;
-    const cw=colW-3;
-    if(day.energyMode===null) return;
-    const isPeak=day.energyMode==='peak';
-    const barH=Math.max(8, kH * (isPeak? 0.65 : 0.35));
-    const barY=kBot-barH;
-    ctx.fillStyle=isPeak?'rgba(74,124,111,0.55)':'rgba(139,111,94,0.55)';
-    ctx.strokeStyle=isPeak?'#4a7c6f':'#8b6f5e';
-    ctx.lineWidth=0.8;
-    ctx.fillRect(cx+1,barY,cw,barH);
-    ctx.strokeRect(cx+1,barY,cw,barH);
+    const cw=colW-6;
+    const midX=cx+colW/2;
+
+    if(day.openW===null&&day.closeW===null) return;
+    const open=day.openW||day.closeW;
+    const close=day.closeW||day.openW;
+    const high=day.highW||Math.max(open,close);
+    const low=day.lowW||Math.min(open,close);
+
+    // 涨跌颜色：体重减少=红（好事），体重增加=绿（需注意）
+    // 按照金融K线惯例但含义反转：close<open（体重下降）=红色
+    const isDown=(close<open); // 体重减少
+    const candleColor=isDown?'#c0392b':'#27ae60';
+    const candleAlpha=isDown?'rgba(192,57,43,0.8)':'rgba(39,174,96,0.8)';
+    const candleStroke=isDown?'#c0392b':'#27ae60';
+
+    // 蜡烛体填充色：由当天高峰/低谷哪个占时间多决定
+    const energyFill=day.energyMode==='peak'?'rgba(74,124,111,0.7)':
+                     day.energyMode==='low'?'rgba(139,111,94,0.7)':null;
+
+    const yOpen=wToY(open);
+    const yClose=wToY(close);
+    const yHigh=wToY(high);
+    const yLow=wToY(low);
+
+    const bodyTop=Math.min(yOpen,yClose);
+    const bodyBot=Math.max(yOpen,yClose);
+    const bodyH=Math.max(2,bodyBot-bodyTop);
+    const halfW=Math.max(3,cw/2);
+
+    // 上下影线
+    ctx.strokeStyle=candleColor;ctx.lineWidth=1.2;
+    if(yHigh<bodyTop){ctx.beginPath();ctx.moveTo(midX,yHigh);ctx.lineTo(midX,bodyTop);ctx.stroke();}
+    if(yLow>bodyBot){ctx.beginPath();ctx.moveTo(midX,yLow);ctx.lineTo(midX,bodyBot);ctx.stroke();}
+
+    // 蜡烛体：先用能量颜色填充，再用涨跌色描边
+    ctx.fillStyle=energyFill||candleAlpha;
+    ctx.strokeStyle=candleStroke;ctx.lineWidth=1.2;
+    ctx.fillRect(midX-halfW,bodyTop,halfW*2,bodyH);
+    ctx.strokeRect(midX-halfW,bodyTop,halfW*2,bodyH);
   });
 
-  // 体重折线（连接每天最后一条体重）
-  const wPts=dayData.map((day,i)=>{
-    if(!day.lastWeight) return null;
-    return {x:leftPad+i*colW+(colW-3)/2+1, y:wToY(day.lastWeight), v:day.lastWeight};
-  });
-  // 画线
-  ctx.strokeStyle='#4a7c6f';ctx.lineWidth=1.8;ctx.lineJoin='round';
-  let started=false;
+  // ── 5日均线 ──
+  ctx.strokeStyle='#c4956a';ctx.lineWidth=1.5;ctx.lineJoin='round';
+  ctx.setLineDash([]);
+  let ma5started=false;
   ctx.beginPath();
-  wPts.forEach(pt=>{
-    if(!pt){started=false;return;}
-    if(!started){ctx.moveTo(pt.x,pt.y);started=true;}
-    else ctx.lineTo(pt.x,pt.y);
+  ma5.forEach((v,i)=>{
+    if(v===null){ma5started=false;return;}
+    const x=leftPad+i*colW+colW/2;
+    const y=wToY(v);
+    if(!ma5started){ctx.moveTo(x,y);ma5started=true;}
+    else ctx.lineTo(x,y);
   });
   ctx.stroke();
-  // 点
-  wPts.forEach(pt=>{
-    if(!pt)return;
-    ctx.beginPath();ctx.arc(pt.x,pt.y,3,0,Math.PI*2);
-    ctx.fillStyle='#4a7c6f';ctx.fill();
-    ctx.strokeStyle='white';ctx.lineWidth=1;ctx.stroke();
-  });
 
   // 日期标签（底部）
   dayData.forEach((day,i)=>{
-    const cx=leftPad+i*colW+(colW-3)/2+1;
+    const cx=leftPad+i*colW+colW/2;
     ctx.font='8.5px -apple-system,sans-serif';ctx.fillStyle='#9b9088';ctx.textAlign='center';
     ctx.fillText(day.label,cx,kBot+botPad-8);
   });
@@ -1497,6 +1663,5 @@ setInterval(renderTodaySummary,60000);
 init();
 if(!DB.get('_launched')){DB.set('_launched','1');setTimeout(()=>showToast('👋 先选择今天的状态模式吧'),1200)}
 </script>
-  <script type="module" src="/index.tsx"></script>
 </body>
 </html>
