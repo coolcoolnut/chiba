@@ -303,9 +303,12 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);font-size:15px;line-heig
   <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
     <canvas id="combinedChart" style="min-width:320px"></canvas>
   </div>
-  <div style="font-size:11px;color:var(--text3);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap">
-    <span>🟩 进食窗口</span><span>🟦 空腹段</span><span style="color:var(--accent)">● 体重记录</span>
+  <div style="font-size:11px;color:var(--text3);margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;line-height:1.8">
+    <span>🟧 进食窗口</span><span>🟩 空腹段</span><span>● 体重记录时刻</span>
+    <span style="color:var(--peak)">▬ 体重折线</span>
+    <span style="color:var(--peak)">■ 高峰为主</span><span style="color:var(--low)">■ 低谷为主</span>
   </div>
+  <div style="font-size:11px;color:var(--text3);margin-top:2px">上半：0–24h 时间段；下半：K线=当天能量综合，折线=每日末次体重</div>
 </div>
       </div>
 
@@ -597,6 +600,9 @@ function openModeSwitch(){
     <button class="btn-ghost" style="margin-top:10px" onclick="closeModal()">取消</button>`);
 }
 function previewMode(m){
+  // 如果是从 peek 状态点的，先静默归位
+  if(_peekOrigMode!==null && m===_peekOrigMode){exitPeek();closeModal();return;}
+  if(_peekOrigMode!==null) exitPeek();
   // 如果已经是这个模式，直接关闭
   if(m===currentMode){closeModal();return;}
   const label=m==='peak'?'⚡ 高峰模式':'🌙 低谷模式';
@@ -609,11 +615,21 @@ function previewMode(m){
       <button class="btn-ghost" onclick="openModeSwitch()">← 返回</button>
     </div>`);
 }
+let _peekOrigMode=null;
 function peekMode(m){
   // 仅切换界面显示，不记录能量事件，不改 DB
+  if(_peekOrigMode===null) _peekOrigMode=currentMode; // 记住原始状态
   currentMode=m;
   closeModal();renderMode();renderChecklist();
-  showToast('👁 仅预览 '+( m==='peak'?'高峰':'低谷')+'模式要求，未记录');
+  showToast('👁 预览'+( m==='peak'?'高峰':'低谷')+'要求，未记录');
+}
+function exitPeek(){
+  // 从 peek 切回原状态，完全静默
+  if(_peekOrigMode!==null){
+    currentMode=_peekOrigMode;
+    _peekOrigMode=null;
+    renderMode();renderChecklist();
+  }
 }
 function setMode(m){
   currentMode=m;DB.set('mode',m);
@@ -902,6 +918,7 @@ window.startTimer=function(){
   },1000);
 };
 function selE(btn,g){document.querySelectorAll('#'+g+' .emoji-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected')}
+function selEMode(val,el){document.querySelectorAll('#eem_peak,#eem_low').forEach(b=>b.classList.remove('selected'));if(el)el.classList.add('selected');}
 
 // ── SAVE ──────────────────────────────────────────────────
 function saveWeight(){
@@ -1012,6 +1029,15 @@ function editEntry(type,id){
       </select>
       <div class="modal-label">吃了什么</div><input class="modal-input" id="eML" value="${entry.note||''}">`;
   }
+  else if(type==='energyEvents'){
+    fields=`<div class="modal-label">能量状态</div>
+      <div class="meal-slots">
+        <button class="meal-slot ${entry.mode==='peak'?'selected':''}" id="eem_peak" onclick="selEMode('peak',this)">⚡ 高峰</button>
+        <button class="meal-slot ${entry.mode==='low'?'selected':''}" id="eem_low" onclick="selEMode('low',this)">🌙 低谷</button>
+      </div>
+      <div class="modal-label">备注（可选）</div>
+      <input class="modal-input" id="eENote" value="${entry.note||''}" placeholder="手滑了？这里说明一下">`;
+  }
 
   showModal(`<div class="modal-title">编辑记录</div>
     ${fields}
@@ -1031,6 +1057,10 @@ function doEdit(type,id){
   else if(type==='measures'){f.waist=parseFloat(document.getElementById('eMW').value)||null;f.hip=parseFloat(document.getElementById('eMH').value)||null;f.thigh=parseFloat(document.getElementById('eMT').value)||null;f.arm=parseFloat(document.getElementById('eMA').value)||null;}
   else if(type==='logs')f.summary=document.getElementById('eLT').value;
   else if(type==='meals'){f.note=document.getElementById('eML').value;f.slot=document.getElementById('eMS').value;}
+  else if(type==='energyEvents'){
+    f.mode=document.getElementById('eem_peak')?.classList.contains('selected')?'peak':'low';
+    f.note=document.getElementById('eENote')?.value||'';
+  }
   DB.updateById(type,id,f);closeModal();showToast('✅ 已更新');
   renderTodaySummary();
   if(document.getElementById('page-data').classList.contains('active'))renderDataPage();
@@ -1155,109 +1185,193 @@ function renderCombinedChart(){
   if(!canvas)return;
   const weights=DB.get('weights')||[];
   const fasting=DB.get('fasting')||{};
+  const energyEvents=(DB.get('energyEvents')||[]).filter(e=>!e.auto);
   const days=combinedDays||7;
 
-  // 收集数据
+  // ── 每天数据 ──
   const dayData=[];
   for(let i=days-1;i>=0;i--){
     const d=new Date();d.setDate(d.getDate()-i);d.setHours(0,0,0,0);
     const k=d.toDateString();
     const tf=fasting[k]||{};
     const dayWeights=weights.filter(w=>new Date(w.date).toDateString()===k);
+    // 能量事件：计算高峰/低谷占比 → K线颜色
+    const dayEvts=energyEvents.filter(e=>new Date(e.date).toDateString()===k)
+      .sort((a,b)=>new Date(a.date)-new Date(b.date));
+    // 计算加权时长：相邻两事件之间的分钟数归属到前者模式
+    let peakMin=0,lowMin=0;
+    if(dayEvts.length>0){
+      for(let j=0;j<dayEvts.length;j++){
+        const ev=dayEvts[j];
+        const tStart=new Date(ev.date).getHours()*60+new Date(ev.date).getMinutes();
+        const tEnd=j+1<dayEvts.length
+          ? new Date(dayEvts[j+1].date).getHours()*60+new Date(dayEvts[j+1].date).getMinutes()
+          : 1440;
+        const dur=Math.max(0,tEnd-tStart);
+        if(ev.mode==='peak') peakMin+=dur; else lowMin+=dur;
+      }
+    }
+    const energyMode=dayEvts.length===0?null:(peakMin>=lowMin?'peak':'low');
+    // 体重：昨天最后一条 = "开盘"，今天最后一条 = "收盘"
+    const sortedW=dayWeights.sort((a,b)=>new Date(a.date)-new Date(b.date));
     dayData.push({
       date:d, label:dateLabel(d), k,
-      firstMeal:tf.firstMeal||null,   // 'HH:MM'
+      firstMeal:tf.firstMeal||null,
       lastMeal:tf.lastMeal||null,
       windowHours:tf.windowHours||8,
-      weights:dayWeights.map(w=>({
-        min: new Date(w.date).getHours()*60+new Date(w.date).getMinutes(),
-        val: w.value
-      }))
+      weights:sortedW.map(w=>({
+        min:new Date(w.date).getHours()*60+new Date(w.date).getMinutes(),
+        val:w.value
+      })),
+      lastWeight:sortedW.length?sortedW[sortedW.length-1].value:null,
+      energyMode,  // 'peak'|'low'|null
+      peakMin, lowMin,
+      energyEvts:dayEvts
     });
   }
 
-  // Canvas 手绘
+  // ── Canvas ──
   const dpr=window.devicePixelRatio||1;
-  const colW=Math.max(36, Math.floor((canvas.parentElement.clientWidth-60)/days));
-  const canvasW=60+colW*days;
-  const canvasH=260;
-  canvas.width=canvasW*dpr;canvas.height=canvasH*dpr;
-  canvas.style.width=canvasW+'px';canvas.style.height=canvasH+'px';
+  const minColW=44;
+  const containerW=canvas.parentElement.clientWidth||320;
+  const colW=Math.max(minColW, Math.floor((containerW-52)/days));
+  const canvasW=52+colW*days;
+  // 双区高度：上方时间轴（进食/空腹）+ 下方K线+体重
+  const timeH=180, kH=80, gap=8, botPad=24, topPad=10;
+  const canvasH=topPad+timeH+gap+kH+botPad;
+  canvas.width=canvasW*dpr; canvas.height=canvasH*dpr;
+  canvas.style.width=canvasW+'px'; canvas.style.height=canvasH+'px';
   const ctx=canvas.getContext('2d');
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,canvasW,canvasH);
 
-  // 布局
-  const leftPad=44, topPad=12, botPad=28, chartH=canvasH-topPad-botPad;
-  // 纵轴：0~24h，0分=顶，24h=底（更直觉：早上在上）
-  function minToY(min){ return topPad + (min/1440)*chartH; }
+  const leftPad=46;
 
-  // 画纵轴刻度
-  ctx.font=`${9*dpr/dpr}px -apple-system,sans-serif`;ctx.fillStyle='#9b9088';ctx.textAlign='right';
+  // ── 上半：24h 时间轴 ──
+  function minToY(min){ return topPad+(min/1440)*timeH; }
+
+  // 横格线
   [0,4,8,12,16,20,24].forEach(h=>{
     const y=minToY(h*60);
+    ctx.strokeStyle='rgba(42,37,32,0.06)';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(leftPad,y);ctx.lineTo(canvasW-2,y);ctx.stroke();
+    ctx.font='8px -apple-system,sans-serif';ctx.fillStyle='#b0a89e';ctx.textAlign='right';
     ctx.fillText(h+'h',leftPad-4,y+3);
-    ctx.strokeStyle='rgba(42,37,32,0.05)';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(leftPad,y);ctx.lineTo(canvasW-4,y);ctx.stroke();
   });
 
-  // 每列
+  // 每列：进食/空腹段
   dayData.forEach((day,i)=>{
-    const x=leftPad+i*colW;
+    const cx=leftPad+i*colW;
     const cw=colW-3;
-
-    // 空腹段：深蓝绿色（昨晚lastMeal ~ 今天firstMeal）
-    // 简化：如有 firstMeal，画 0~firstMeal 为空腹
     if(day.firstMeal){
       const fm=t2m(day.firstMeal);
-      // 凌晨到第一餐 = 空腹段
-      ctx.fillStyle='rgba(74,124,111,0.18)';
-      ctx.fillRect(x+2,minToY(0),cw,minToY(fm)-minToY(0));
-
-      // 进食窗口段
-      const lm=day.lastMeal?t2m(day.lastMeal):fm+day.windowHours*60;
+      const lm=day.lastMeal?t2m(day.lastMeal):Math.min(fm+day.windowHours*60,1440);
       const eatEnd=Math.min(lm,1440);
-      ctx.fillStyle='rgba(196,149,106,0.28)';
-      ctx.fillRect(x+2,minToY(fm),cw,minToY(eatEnd)-minToY(fm));
-
-      // 进食窗口后到次日 = 空腹段
-      if(eatEnd<1440){
-        ctx.fillStyle='rgba(74,124,111,0.18)';
-        ctx.fillRect(x+2,minToY(eatEnd),cw,minToY(1440)-minToY(eatEnd));
+      // 空腹：0~fm
+      if(fm>0){
+        ctx.fillStyle='rgba(74,124,111,0.14)';
+        ctx.fillRect(cx+1,minToY(0),cw,minToY(fm)-minToY(0));
       }
-
-      // 进食窗口边框线
-      ctx.strokeStyle='rgba(196,149,106,0.6)';ctx.lineWidth=1;
-      ctx.strokeRect(x+2,minToY(fm),cw,Math.max(2,minToY(eatEnd)-minToY(fm)));
+      // 进食：fm~eatEnd
+      ctx.fillStyle='rgba(196,149,106,0.25)';
+      ctx.fillRect(cx+1,minToY(fm),cw,Math.max(2,minToY(eatEnd)-minToY(fm)));
+      // 边框
+      ctx.strokeStyle='rgba(196,149,106,0.5)';ctx.lineWidth=0.8;
+      ctx.strokeRect(cx+1,minToY(fm),cw,Math.max(2,minToY(eatEnd)-minToY(fm)));
+      // 空腹：eatEnd~24
+      if(eatEnd<1440){
+        ctx.fillStyle='rgba(74,124,111,0.14)';
+        ctx.fillRect(cx+1,minToY(eatEnd),cw,minToY(1440)-minToY(eatEnd));
+      }
     }
-
-    // 体重点
+    // 体重点（在时间轴上按记录时刻标注）
     day.weights.forEach(w=>{
       const y=minToY(w.min);
-      ctx.beginPath();ctx.arc(x+cw/2+2,y,4,0,Math.PI*2);
+      ctx.beginPath();ctx.arc(cx+cw/2+1,y,3.5,0,Math.PI*2);
       ctx.fillStyle='#8b6f5e';ctx.fill();
-      ctx.strokeStyle='white';ctx.lineWidth=1.5;ctx.stroke();
-      // 体重数值
-      ctx.font=`${8}px -apple-system,sans-serif`;
-      ctx.fillStyle='#6b6158';ctx.textAlign='center';
-      ctx.fillText(w.val,x+cw/2+2,y-7);
+      ctx.strokeStyle='rgba(255,255,255,0.9)';ctx.lineWidth=1.2;ctx.stroke();
+      ctx.font='7.5px -apple-system,sans-serif';ctx.fillStyle='#6b6158';ctx.textAlign='center';
+      ctx.fillText(w.val,cx+cw/2+1,y-6);
     });
+  });
 
-    // 日期标签
-    ctx.font=`${9}px -apple-system,sans-serif`;ctx.fillStyle='#9b9088';ctx.textAlign='center';
-    ctx.fillText(day.label,x+cw/2+2,canvasH-8);
+  // ── 下半：K线 + 体重折线 ──
+  const kTop=topPad+timeH+gap;
+  const kBot=kTop+kH;
+
+  // 计算体重 Y 轴范围
+  const allW=dayData.flatMap(d=>d.weights.map(w=>w.val)).filter(v=>v!=null);
+  const wMin=allW.length?Math.min(...allW)-0.5:60;
+  const wMax=allW.length?Math.max(...allW)+0.5:80;
+  function wToY(v){ return kBot-((v-wMin)/(wMax-wMin||1))*kH; }
+
+  // 纵轴标注
+  ctx.font='8px -apple-system,sans-serif';ctx.fillStyle='#b0a89e';ctx.textAlign='right';
+  [wMin+0.5,wMax-0.5].forEach(v=>{
+    ctx.fillText(v.toFixed(1),leftPad-4,wToY(v)+3);
+  });
+  // 横格线下半
+  ctx.strokeStyle='rgba(42,37,32,0.06)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(leftPad,kTop);ctx.lineTo(canvasW-2,kTop);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(leftPad,kBot);ctx.lineTo(canvasW-2,kBot);ctx.stroke();
+
+  // K线柱（每天能量综合）
+  dayData.forEach((day,i)=>{
+    const cx=leftPad+i*colW;
+    const cw=colW-3;
+    if(day.energyMode===null) return;
+    const isPeak=day.energyMode==='peak';
+    const barH=Math.max(8, kH * (isPeak? 0.65 : 0.35));
+    const barY=kBot-barH;
+    ctx.fillStyle=isPeak?'rgba(74,124,111,0.55)':'rgba(139,111,94,0.55)';
+    ctx.strokeStyle=isPeak?'#4a7c6f':'#8b6f5e';
+    ctx.lineWidth=0.8;
+    ctx.fillRect(cx+1,barY,cw,barH);
+    ctx.strokeRect(cx+1,barY,cw,barH);
+  });
+
+  // 体重折线（连接每天最后一条体重）
+  const wPts=dayData.map((day,i)=>{
+    if(!day.lastWeight) return null;
+    return {x:leftPad+i*colW+(colW-3)/2+1, y:wToY(day.lastWeight), v:day.lastWeight};
+  });
+  // 画线
+  ctx.strokeStyle='#4a7c6f';ctx.lineWidth=1.8;ctx.lineJoin='round';
+  let started=false;
+  ctx.beginPath();
+  wPts.forEach(pt=>{
+    if(!pt){started=false;return;}
+    if(!started){ctx.moveTo(pt.x,pt.y);started=true;}
+    else ctx.lineTo(pt.x,pt.y);
+  });
+  ctx.stroke();
+  // 点
+  wPts.forEach(pt=>{
+    if(!pt)return;
+    ctx.beginPath();ctx.arc(pt.x,pt.y,3,0,Math.PI*2);
+    ctx.fillStyle='#4a7c6f';ctx.fill();
+    ctx.strokeStyle='white';ctx.lineWidth=1;ctx.stroke();
+  });
+
+  // 日期标签（底部）
+  dayData.forEach((day,i)=>{
+    const cx=leftPad+i*colW+(colW-3)/2+1;
+    ctx.font='8.5px -apple-system,sans-serif';ctx.fillStyle='#9b9088';ctx.textAlign='center';
+    ctx.fillText(day.label,cx,kBot+botPad-8);
   });
 }
 
 // ── ALL RECORDS LIST ──────────────────────────────────────
 function renderAllRecords(){
   const logs=DB.get('logs')||[];const weights=DB.get('weights')||[];const exercises=DB.get('exercises')||[];const measures=DB.get('measures')||[];const meals=DB.get('meals')||[];
+  const energyEvents=(DB.get('energyEvents')||[]).filter(e=>!e.auto);
   let all=[
     ...logs.map(l=>({...l,_t:'logs',_cat:l.category||'other'})),
     ...weights.map(w=>({...w,_t:'weights',_cat:'weight',icon:'⚖️',summary:`体重 ${w.value} kg${w.fat?'，体脂 '+w.fat+'%':''}${w.note?' · '+w.note:''}`})),
     ...exercises.map(e=>({...e,_t:'exercises',_cat:'exercise',icon:'🏃',summary:`${e.type} ${e.dur}分钟${e.cal?' · '+e.cal+'kcal':''}${e.mood?' · '+e.mood:''}`})),
     ...measures.map(m=>{const p=[m.waist&&`腰${m.waist}`,m.hip&&`臀${m.hip}`,m.thigh&&`腿${m.thigh}`,m.arm&&`臂${m.arm}`].filter(Boolean);return{...m,_t:'measures',_cat:'measure',icon:'📏',summary:'围度 · '+p.join(' / ')+' cm'}}),
-    ...meals.map(m=>{const slotNames={'first':'第一餐','second':'第二餐','third':'第三餐','snack':'加餐'};return{...m,_t:'meals',_cat:'meal',icon:'🍽️',summary:(slotNames[m.slot]||m.slot)+(m.note?' · '+m.note:'')}})
+    ...meals.map(m=>{const slotNames={'first':'第一餐','second':'第二餐','third':'第三餐','snack':'加餐'};return{...m,_t:'meals',_cat:'meal',icon:'🍽️',summary:(slotNames[m.slot]||m.slot)+(m.note?' · '+m.note:'')}}),
+    ...energyEvents.map(e=>({...e,_t:'energyEvents',_cat:'energy',icon:e.mode==='peak'?'⚡':'🌙',summary:(e.mode==='peak'?'高峰模式':'低谷模式')+(e.note?' · '+e.note:'')}))
   ];
   // Deduplicate: logs that were added alongside weights/exercises already exist in those arrays
   // Just show logs for binge/text, and the typed arrays for structured data
@@ -1269,7 +1383,7 @@ function renderAllRecords(){
   });
 
   if(currentRecordFilter!=='all'){
-    const catMap={meal:['meal','meals'],exercise:['exercise','exercises'],weight:['weight','weights'],binge:['binge'],measure:['measure','measures']};
+    const catMap={meal:['meal','meals'],exercise:['exercise','exercises'],weight:['weight','weights'],binge:['binge'],measure:['measure','measures'],energy:['energy','energyEvents']};
     const cats=catMap[currentRecordFilter]||[];
     all=all.filter(e=>cats.includes(e._cat)||cats.includes(e._t));
   }
