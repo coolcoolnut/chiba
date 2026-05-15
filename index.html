@@ -29,9 +29,10 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden;background:var(--bg)}
+/* ensure topbar blends seamlessly */
 body{font-family:'DM Sans',sans-serif;color:var(--text);font-size:15px;line-height:1.6}
 .app{display:flex;flex-direction:column;height:100vh;height:100dvh}
-.main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;background:var(--bg)}
 .page{display:none;padding:12px 16px 100px;max-width:480px;margin:0 auto}
 .page.active{display:block}
 
@@ -42,13 +43,16 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);font-size:15px;line-heig
 .nav-item svg{width:22px;height:22px;stroke-width:1.8}
 
 /* TOPBAR */
-.topbar{padding:14px 16px 4px;max-width:480px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+.topbar{padding:14px 16px 4px;max-width:480px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;background:var(--bg)}
 .topbar-brand{font-family:'Noto Serif SC',serif;font-size:17px;color:var(--text);font-weight:600}
 .topbar-date{font-size:12px;color:var(--text3)}
 
-/* PULL-TO-REFRESH */
-.ptr-indicator{text-align:center;height:0;overflow:hidden;transition:height .2s;font-size:13px;color:var(--text3);display:flex;align-items:center;justify-content:center;gap:6px}
-.ptr-indicator.show{height:40px}
+/* REFRESH BTN */
+.refresh-btn{background:none;border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--text3);cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px;transition:all .2s}
+.refresh-btn:active{background:var(--bg2);color:var(--text)}
+.refresh-btn.spinning svg{animation:spin .7s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
 
 /* MODE CARD */
 .mode-card{border-radius:20px;padding:22px 22px 18px;margin-bottom:14px;cursor:pointer;transition:transform .15s,box-shadow .15s;border:none;width:100%;text-align:left;box-shadow:var(--shadow-md);position:relative;overflow:hidden}
@@ -181,14 +185,48 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);font-size:15px;line-heig
 .data-section{display:none}
 .data-section.active{display:block}
 </style>
+<script>
+(function(){
+  // 生成 PNG apple-touch-icon（Safari 不支持 SVG apple-touch-icon）
+  try{
+    const c=document.createElement('canvas');c.width=180;c.height=180;
+    const ctx=c.getContext('2d');
+    // 背景
+    const r=c.width*0.22;
+    ctx.beginPath();ctx.moveTo(r,0);ctx.lineTo(c.width-r,0);ctx.quadraticCurveTo(c.width,0,c.width,r);
+    ctx.lineTo(c.width,c.height-r);ctx.quadraticCurveTo(c.width,c.height,c.width-r,c.height);
+    ctx.lineTo(r,c.height);ctx.quadraticCurveTo(0,c.height,0,c.height-r);
+    ctx.lineTo(0,r);ctx.quadraticCurveTo(0,0,r,0);ctx.closePath();
+    const grad=ctx.createLinearGradient(0,0,c.width,c.height);
+    grad.addColorStop(0,'#5a8a7d');grad.addColorStop(1,'#3a6a60');
+    ctx.fillStyle=grad;ctx.fill();
+    // 海浪
+    ctx.fillStyle='rgba(45,90,80,0.5)';
+    ctx.beginPath();ctx.moveTo(0,115);
+    for(let x=0;x<=180;x+=30){ctx.quadraticCurveTo(x+15,105,x+30,115);}
+    ctx.lineTo(180,180);ctx.lineTo(0,180);ctx.closePath();ctx.fill();
+    // emoji 文字
+    ctx.font='88px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('🏄',90,82);
+    // 设置图标
+    const link=document.querySelector('link[rel="apple-touch-icon"]')||document.createElement('link');
+    link.rel='apple-touch-icon';link.href=c.toDataURL('image/png');
+    if(!link.parentNode)document.head.appendChild(link);
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 <div class="app">
   <div class="main" id="mainScroll">
-    <div class="ptr-indicator" id="ptrIndicator">↑ 松开刷新</div>
     <div class="topbar">
-      <span class="topbar-brand">🏄🏻‍♀️ 能量冲浪手</span>
-      <span class="topbar-date" id="todayDate"></span>
+      <span class="topbar-brand">🏄🏻‍♀️ 吃吧！能量冲浪手</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="topbar-date" id="todayDate"></span>
+        <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>刷新
+        </button>
+      </div>
     </div>
 
     <!-- TODAY -->
@@ -376,13 +414,13 @@ const DB={
   removeById(k,id){const a=(this.get(k)||[]).filter(x=>x.id!==id);this.set(k,a)},
   updateById(k,id,f){const a=this.get(k)||[];const i=a.findIndex(x=>x.id===id);if(i>=0){a[i]={...a[i],...f};this.set(k,a)}},
   all(){
-    const keys=['mode','weights','exercises','measures','logs','checkedToday','fasting','energyEvents','summaryVisible','meals','morningDismissed'];
+    const keys=['mode','weights','exercises','measures','logs','checkedToday','fasting','energyEvents','summaryVisible','meals','morningDismissed','proteinChecks'];
     const d={_v:4,_at:new Date().toISOString()};
     keys.forEach(k=>{const v=this.get(k);if(v!==null)d[k]=v});
     return d;
   },
   restore(d){
-    ['mode','weights','exercises','measures','logs','checkedToday','fasting','energyEvents','summaryVisible','meals','morningDismissed'].forEach(k=>{if(k in d)this.set(k,d[k])});
+    ['mode','weights','exercises','measures','logs','checkedToday','fasting','energyEvents','summaryVisible','meals','morningDismissed','proteinChecks'].forEach(k=>{if(k in d)this.set(k,d[k])});
   }
 };
 
@@ -499,24 +537,23 @@ function init(){
   renderMode();renderChecklist();renderTodaySummary();applySummaryState();
   setTimeout(checkMorning,800);
   checkYesterdayLastMeal();
-  setupPullToRefresh();
 }
 
-// ── PULL TO REFRESH ───────────────────────────────────────
-function setupPullToRefresh(){
-  const main=document.getElementById('mainScroll');
-  let startY=0,pulling=false;
-  const ind=document.getElementById('ptrIndicator');
-  main.addEventListener('touchstart',e=>{if(main.scrollTop===0)startY=e.touches[0].clientY;},{ passive:true});
-  main.addEventListener('touchmove',e=>{
-    if(startY===0)return;
-    const dy=e.touches[0].clientY-startY;
-    if(dy>50&&main.scrollTop===0){pulling=true;ind.classList.add('show');}
-  },{passive:true});
-  main.addEventListener('touchend',()=>{
-    if(pulling){ind.textContent='刷新中...';setTimeout(()=>{location.reload()},300);}
-    pulling=false;startY=0;
-  },{passive:true});
+// ── REFRESH ───────────────────────────────────────────────
+function doRefresh(){
+  const btn=document.getElementById('refreshBtn');
+  if(btn)btn.classList.add('spinning');
+  // re-render all data
+  const now=new Date();
+  document.getElementById('todayDate').textContent=`${now.getMonth()+1}月${now.getDate()}日 ${'日一二三四五六'[now.getDay()]}`;
+  // reset today key if date changed
+  const newTodayKey=new Date().toDateString();
+  if(newTodayKey!==todayKey){
+    location.reload();return;
+  }
+  renderMode();renderChecklist();renderTodaySummary();applySummaryState();checkMorning();
+  if(document.getElementById('page-data').classList.contains('active'))renderDataPage();
+  setTimeout(()=>{if(btn)btn.classList.remove('spinning');showToast('✅ 已刷新');},400);
 }
 
 // ── MODE ──────────────────────────────────────────────────
@@ -549,9 +586,64 @@ function setMode(m){
 }
 
 // ── CHECKLIST ─────────────────────────────────────────────
+let proteinSubExpanded = DB.get('proteinSubExpanded') !== false;
+
+function getTodayMeals(){
+  const meals = DB.get('meals')||[];
+  return meals.filter(m=>new Date(m.date).toDateString()===todayKey);
+}
+
+function getProteinSubs(){
+  // 每一条今天的正餐/加餐记录生成一个蛋白质子任务
+  const meals = getTodayMeals();
+  const proteinChecks = DB.get('proteinChecks')||{};
+  const todayChecks = proteinChecks[todayKey]||{};
+  const slotLabel = {'first':'第一餐','second':'第二餐','third':'第三餐','snack':'加餐'};
+  return meals.map(m=>{
+    const label = slotLabel[m.slot]||m.slot;
+    const food = m.note ? `（${m.note}）` : '';
+    return { id: m.id, label: `${label}先吃蛋白质${food}`, done: !!todayChecks[m.id] };
+  });
+}
+
+function toggleProteinSub(mealId){
+  const proteinChecks = DB.get('proteinChecks')||{};
+  if(!proteinChecks[todayKey]) proteinChecks[todayKey]={};
+  proteinChecks[todayKey][mealId] = !proteinChecks[todayKey][mealId];
+  DB.set('proteinChecks', proteinChecks);
+  renderChecklist(); renderTodaySummary();
+}
+
+function toggleProteinExpand(){
+  proteinSubExpanded = !proteinSubExpanded;
+  DB.set('proteinSubExpanded', proteinSubExpanded);
+  renderChecklist();
+}
+
 function renderChecklist(){
+  const subs = getProteinSubs();
+  const subDone = subs.filter(s=>s.done).length;
+  const subTotal = subs.length;
+
   document.getElementById('checklistContainer').innerHTML=LISTS[currentMode].map(item=>{
     const done=checkedItems[item.id];
+    // 蛋白质任务：显示子任务计数 + 展开/隐藏
+    if(item.id==='protein' && currentMode==='peak'){
+      const badge = subTotal>0 ? `<span style="font-size:11px;color:${subDone===subTotal&&subTotal>0?'var(--peak)':'var(--text3)'};margin-left:6px;font-weight:600">${subDone}/${subTotal}</span>` : '';
+      const arrow = subTotal>0 ? `<span style="font-size:11px;color:var(--text3);margin-left:4px;transition:transform .2s;display:inline-block;transform:${proteinSubExpanded?'rotate(0deg)':'rotate(-90deg)'}">▾</span>` : '';
+      const subHtml = (subTotal>0 && proteinSubExpanded) ? subs.map(s=>`
+        <div class="check-item ${s.done?'done':''}" style="padding:7px 0 7px 34px;border-bottom:none" onclick="toggleProteinSub('${s.id}')">
+          <div class="check-box" style="width:18px;height:18px;border-radius:4px;flex-shrink:0;margin-top:0"><svg viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>
+          <div><div class="check-label" style="font-size:13px">${s.label}</div></div>
+        </div>`).join('') : '';
+      return`<div>
+        <div class="check-item" style="${done?'opacity:.4':''}" onclick="toggleProteinExpand()">
+          <div class="check-box" style="${done?'background:var(--peak);border-color:var(--peak)':''}"><svg viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>
+          <div style="flex:1"><div class="check-label">${item.label}${badge}${arrow}</div><div class="check-note">${item.note}</div></div>
+        </div>
+        ${subHtml}
+      </div>`;
+    }
     return`<div class="check-item ${done?'done':''}" onclick="toggleCheck('${item.id}',this)">
       <div class="check-box"><svg viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>
       <div><div class="check-label">${item.label}</div><div class="check-note">${item.note}</div></div>
@@ -587,7 +679,11 @@ function pbar(label,pct,note,color,val){
 }
 function renderTodaySummary(){
   const items=LISTS[currentMode];
-  const done=items.filter(i=>checkedItems[i.id]).length,total=items.length,pct=Math.round(done/total*100);
+  // 蛋白质任务：子任务全勾则算完成
+  const subs=getProteinSubs();
+  const proteinDone=subs.length>0?subs.every(s=>s.done):!!checkedItems['protein'];
+  const done=items.filter(i=>i.id==='protein'?(currentMode==='peak'?proteinDone:!!checkedItems[i.id]):!!checkedItems[i.id]).length;
+  const total=items.length,pct=Math.round(done/total*100);
   const col=currentMode==='peak'?'var(--peak)':'var(--low)';
   document.getElementById('todayProgress').innerHTML=`<div class="pbar-row" style="margin-bottom:${summaryVisible?'10px':'0'}">
     <div class="pbar-header"><span class="pbar-label">任务完成</span><span class="pbar-value">${done}/${total}</span></div>
@@ -695,22 +791,21 @@ function openModal(type){
     <button class="btn-primary" onclick="saveMeasure()">保存</button><button class="btn-ghost" onclick="closeModal()">取消</button>`);}
 
   else if(type==='meal'){
-    const meals=DB.get('meals')||[];
-    const todayMeals=meals.filter(m=>new Date(m.date).toDateString()===todayKey);
-    const usedSlots=todayMeals.map(m=>m.slot);
     const tf=fasting[todayKey]||{};
-    const firstUsed=usedSlots.includes('first')||!!tf.firstMeal;
-    const secondUsed=usedSlots.includes('second');
-    const thirdUsed=usedSlots.includes('third');
-    function slotBtn(val,label,used){return`<button class="meal-slot ${used?'used':''}" id="slot_${val}" onclick="${used?'':'selectSlot(\''+val+'\',this)'}">${label}${used?' ✓':''}</button>`}
+    const hasFirstIntake=!!tf.firstMeal;
+    const winNote=hasFirstIntake?`<div style="background:var(--peak-bg);border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;color:var(--peak);margin-bottom:4px">📍 进食窗口已开始 ${tf.firstMeal}${tf.windowHours?' · '+tf.windowHours+'h':''}</div>`:'<div style="font-size:12px;color:var(--text3);margin-bottom:4px">💡 第一条记录将自动打开今天的进食窗口</div>';
     showModal(`<div class="modal-title">记录进食 🍽️</div>
-      <div class="modal-label">这是第几餐？</div>
+      ${winNote}
+      <div class="modal-label">这次是？</div>
       <div class="meal-slots">
-        ${slotBtn('first','第一餐',firstUsed)}${slotBtn('second','第二餐',secondUsed)}${slotBtn('third','第三餐',thirdUsed)}<button class="meal-slot" id="slot_snack" onclick="selectSlot('snack',this)">加餐</button>
+        <button class="meal-slot" id="slot_first" onclick="selectSlot('first',this)">第一餐</button>
+        <button class="meal-slot" id="slot_second" onclick="selectSlot('second',this)">第二餐</button>
+        <button class="meal-slot" id="slot_third" onclick="selectSlot('third',this)">第三餐</button>
+        <button class="meal-slot" id="slot_snack" onclick="selectSlot('snack',this)">加餐 / 零食</button>
       </div>
       ${dateTimeRows()}
-      <div class="modal-label">备注（吃了什么，可选）</div>
-      <textarea class="modal-textarea" id="iMealNote" placeholder="鸡胸米饭、外卖沙拉..."></textarea>
+      <div class="modal-label">吃了什么（可选）</div>
+      <textarea class="modal-textarea" id="iMealNote" placeholder="蓝莓 / 鸡胸米饭 / 外卖沙拉..."></textarea>
       <button class="btn-primary" onclick="saveMeal()">保存</button><button class="btn-ghost" onclick="closeModal()">取消</button>`);}
 
   else if(type==='binge'){showModal(`<div class="modal-title">饮食状态 🌊</div>
@@ -726,9 +821,15 @@ function openModal(type){
     const fs=fastState();
     let hint='';
     if(fs.phase==='fasting'&&fs.fastTargetStr)hint=`<div style="background:var(--peak-bg);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--peak);margin-top:8px">根据昨晚最后进食，今天最早 <strong>${fs.fastTargetStr}</strong> 可以开吃。</div>`;
+    const curSlot=tf.firstMealSlot||'meal';
     showModal(`<div class="modal-title">今天第一次进食 🕐</div>
       <div class="modal-label">第一次进食时间</div><input class="modal-input" id="iFF" type="time" value="${tf.firstMeal||'12:00'}">
       ${hint}
+      <div class="modal-label">这次进食是？</div>
+      <div class="meal-slots">
+        <button class="meal-slot ${curSlot!=='snack'?'selected':''}" id="fslot_meal" onclick="selFSlot('meal',this)">正餐</button>
+        <button class="meal-slot ${curSlot==='snack'?'selected':''}" id="fslot_snack" onclick="selFSlot('snack',this)">加餐 / 零食</button>
+      </div>
       <div class="modal-label">进食窗口长度</div>
       <select class="modal-select" id="iFW"><option value="6">6 小时</option><option value="7">7 小时</option><option value="8" ${(tf.windowHours||8)===8?'selected':''}>8 小时（推荐）</option><option value="9">9 小时</option><option value="10">10 小时</option></select>
       <button class="btn-primary" onclick="saveFasting()">保存</button><button class="btn-ghost" onclick="closeModal()">取消</button>`);}
@@ -794,19 +895,24 @@ function saveMeasure(){
   closeModal();showToast('✅ 围度已记录');renderTodaySummary();
 }
 function saveMeal(){
-  if(!selectedSlot){showToast('请选择第几餐');return}
+  if(!selectedSlot){showToast('请选择类型');return}
   const{dateStr,timeStr}=getInputDateTime();const note=document.getElementById('iMealNote').value;
   const slotLabel={'first':'第一餐','second':'第二餐','third':'第三餐','snack':'加餐'}[selectedSlot];
-  DB.push('meals',{slot:selectedSlot,note,_date:dateStr,_time:timeStr});
+  const mealId=DB.push('meals',{slot:selectedSlot,note,_date:dateStr,_time:timeStr}).slice(-1)[0]?.id;
   DB.push('logs',{icon:'🍽️',summary:`${slotLabel}${note?' · '+note:''}`,category:'meal',_date:dateStr,_time:timeStr});
-  if(selectedSlot==='first'){
-    const fasting=DB.get('fasting')||{};const dk=dateKeyFromStr(dateStr+'T00:00');
-    if(!fasting[dk]?.firstMeal){
-      const win=(fasting[dk]?.windowHours)||8;fasting[dk]={...(fasting[dk]||{}),firstMeal:timeStr,windowHours:win};
-      DB.set('fasting',fasting);showToast(`✅ 第一餐已记录，窗口至 ${m2s(t2m(timeStr)+win*60)}`);
-    } else showToast('✅ 进食已记录');
-  } else showToast('✅ 进食已记录');
-  closeModal();renderTodaySummary();selectedSlot=null;
+  // ── 任何一条饮食记录都自动打开当天进食窗口（如果还没记录的话）──
+  const fasting=DB.get('fasting')||{};
+  const dk=new Date(dateStr+'T00:00').toDateString();
+  if(!fasting[dk]?.firstMeal){
+    const win=(fasting[dk]?.windowHours)||8;
+    fasting[dk]={...(fasting[dk]||{}),firstMeal:timeStr,windowHours:win,firstMealSlot:selectedSlot};
+    DB.set('fasting',fasting);
+    const isSnack=selectedSlot==='snack';
+    showToast(`✅ ${slotLabel}已记录${isSnack?' · 进食窗口已从此刻开始':' · 窗口至 '+m2s(t2m(timeStr)+win*60)}`);
+  } else {
+    showToast('✅ 进食已记录');
+  }
+  closeModal();renderTodaySummary();renderChecklist();selectedSlot=null;
 }
 function saveBinge(){
   const s=document.querySelector('#bSR .selected')?.textContent||'已记录';const n=document.getElementById('iBN').value;
@@ -814,10 +920,17 @@ function saveBinge(){
   DB.push('logs',{icon:'🌊',summary:`饮食状态：${s}${n?' · '+n:''}`,category:'binge',_date:dateStr,_time:timeStr});
   closeModal();showToast('记录完成，放下它 ✨');renderTodaySummary();
 }
+let _fSlot='meal';
+function selFSlot(val,el){_fSlot=val;document.querySelectorAll('#fslot_meal,#fslot_snack').forEach(b=>b.classList.remove('selected'));if(el)el.classList.add('selected');}
 function saveFasting(){
   const first=document.getElementById('iFF').value;const win=parseInt(document.getElementById('iFW').value);
-  const fasting=DB.get('fasting')||{};fasting[todayKey]={...(fasting[todayKey]||{}),firstMeal:first,windowHours:win};DB.set('fasting',fasting);
-  const end=m2s(t2m(first)+win*60);closeModal();showToast(`✅ 进食窗口 ${first}—${end}`);renderTodaySummary();
+  const fasting=DB.get('fasting')||{};
+  fasting[todayKey]={...(fasting[todayKey]||{}),firstMeal:first,windowHours:win,firstMealSlot:_fSlot};
+  DB.set('fasting',fasting);
+  const end=m2s(t2m(first)+win*60);closeModal();
+  const slotLabel=_fSlot==='snack'?'加餐':'正餐';
+  showToast(`✅ 第一次进食（${slotLabel}）${first}，窗口至 ${end}`);
+  renderTodaySummary();renderChecklist();
   const nm=nowMin();const diff=(t2m(first)+win*60-nm)*60000;
   if(diff>0&&diff<12*3600000)setTimeout(()=>showToast('🌙 进食窗口已结束，尽量不再进食'),diff);
 }
@@ -850,7 +963,17 @@ function editEntry(type,id){
     <div class="modal-label">大腿围</div><input class="modal-input" id="eMT" type="number" step="0.5" value="${entry.thigh||''}" inputmode="decimal">
     <div class="modal-label">手臂围</div><input class="modal-input" id="eMA" type="number" step="0.5" value="${entry.arm||''}" inputmode="decimal">`;
   else if(type==='logs')fields=`<div class="modal-label">内容</div><input class="modal-input" id="eLT" value="${entry.summary}">`;
-  else if(type==='meals')fields=`<div class="modal-label">备注</div><input class="modal-input" id="eML" value="${entry.note||''}">`;
+  else if(type==='meals'){
+    const slotNames={'first':'第一餐','second':'第二餐','third':'第三餐','snack':'加餐 / 零食'};
+    fields=`<div class="modal-label">餐次</div>
+      <select class="modal-select" id="eMS">
+        <option value="first" ${entry.slot==='first'?'selected':''}>第一餐</option>
+        <option value="second" ${entry.slot==='second'?'selected':''}>第二餐</option>
+        <option value="third" ${entry.slot==='third'?'selected':''}>第三餐</option>
+        <option value="snack" ${entry.slot==='snack'?'selected':''}>加餐 / 零食</option>
+      </select>
+      <div class="modal-label">吃了什么</div><input class="modal-input" id="eML" value="${entry.note||''}">`;
+  }
 
   showModal(`<div class="modal-title">编辑记录</div>
     ${fields}
@@ -869,7 +992,7 @@ function doEdit(type,id){
   else if(type==='exercises'){f.type=document.getElementById('eET').value;f.dur=parseInt(document.getElementById('eED').value)||0;f.cal=parseInt(document.getElementById('eEC').value)||null;}
   else if(type==='measures'){f.waist=parseFloat(document.getElementById('eMW').value)||null;f.hip=parseFloat(document.getElementById('eMH').value)||null;f.thigh=parseFloat(document.getElementById('eMT').value)||null;f.arm=parseFloat(document.getElementById('eMA').value)||null;}
   else if(type==='logs')f.summary=document.getElementById('eLT').value;
-  else if(type==='meals')f.note=document.getElementById('eML').value;
+  else if(type==='meals'){f.note=document.getElementById('eML').value;f.slot=document.getElementById('eMS').value;}
   DB.updateById(type,id,f);closeModal();showToast('✅ 已更新');
   renderTodaySummary();
   if(document.getElementById('page-data').classList.contains('active'))renderDataPage();
