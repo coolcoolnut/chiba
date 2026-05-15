@@ -290,8 +290,23 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);font-size:15px;line-heig
         </div>
         <div class="data-section active" id="dsWeight"><div class="chart-wrap"><canvas id="weightChart"></canvas></div></div>
         <div class="data-section" id="dsMeasure"><div class="chart-wrap"><canvas id="measureChart"></canvas></div></div>
-        <div class="data-section" id="dsEnergy"><div class="chart-wrap"><canvas id="energyChart"></canvas><div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:14px"><span style="color:var(--peak)">■ 高峰</span><span style="color:var(--low)">■ 低谷</span><span style="color:var(--danger)">■ 超窗口</span></div></div></div>
-        <div class="data-section" id="dsCombined"><div style="height:280px;position:relative"><canvas id="combinedChart"></canvas></div><div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:14px"><span style="color:var(--peak)">▬ 体重</span><span style="color:var(--accent2)">■ 进食窗口</span><span style="color:var(--low)">■ 能量</span></div></div>
+        <div class="data-section" id="dsEnergy"><div class="chart-wrap"><canvas id="energyChart"></canvas><div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:14px"><span style="color:var(--peak)">■ 高峰（手动切换）</span><span style="color:var(--low)">■ 低谷（手动切换）</span></div></div></div>
+        <div class="data-section" id="dsCombined">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--text3)">显示天数</span>
+    <div style="display:flex;gap:4px">
+      <button class="data-tab active" id="cDays7" onclick="setCombinedDays(7,this)" style="padding:4px 10px;font-size:11px">7天</button>
+      <button class="data-tab" id="cDays14" onclick="setCombinedDays(14,this)" style="padding:4px 10px;font-size:11px">14天</button>
+      <button class="data-tab" id="cDays30" onclick="setCombinedDays(30,this)" style="padding:4px 10px;font-size:11px">30天</button>
+    </div>
+  </div>
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <canvas id="combinedChart" style="min-width:320px"></canvas>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap">
+    <span>🟩 进食窗口</span><span>🟦 空腹段</span><span style="color:var(--accent)">● 体重记录</span>
+  </div>
+</div>
       </div>
 
       <!-- All records by category -->
@@ -566,13 +581,14 @@ function renderMode(){
   document.getElementById('modeSub').textContent=p?'推进期 · 按高峰清单认真执行':'守住期 · 只做最低限度就好';
 }
 function openModeSwitch(){
+  const cur=currentMode;
   showModal(`<div class="modal-title">我现在的状态是？</div>
     <div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
-      <div onclick="setMode('peak')" style="padding:20px;border-radius:16px;background:linear-gradient(135deg,#5a8a7d,#3a6a60);cursor:pointer;box-shadow:0 4px 16px rgba(74,124,111,.3)">
+      <div onclick="previewMode('peak')" style="padding:20px;border-radius:16px;background:linear-gradient(135deg,#5a8a7d,#3a6a60);cursor:pointer;box-shadow:0 4px 16px rgba(74,124,111,.3)">
         <div style="font-size:18px;font-weight:600;color:white;margin-bottom:6px">⚡ 高峰模式</div>
         <div style="font-size:13px;color:rgba(255,255,255,.8)">感觉有意思、想动、脑子转得快</div>
       </div>
-      <div onclick="setMode('low')" style="padding:20px;border-radius:16px;background:linear-gradient(135deg,#9b7f6e,#6e4e40);cursor:pointer;box-shadow:0 4px 16px rgba(139,111,94,.3)">
+      <div onclick="previewMode('low')" style="padding:20px;border-radius:16px;background:linear-gradient(135deg,#9b7f6e,#6e4e40);cursor:pointer;box-shadow:0 4px 16px rgba(139,111,94,.3)">
         <div style="font-size:18px;font-weight:600;color:white;margin-bottom:6px">🌙 低谷模式</div>
         <div style="font-size:13px;color:rgba(255,255,255,.8)">什么都不想做、启动困难、情绪低</div>
       </div>
@@ -580,9 +596,30 @@ function openModeSwitch(){
     <div style="margin-top:14px;padding:12px;background:var(--warn-bg);border-radius:var(--radius-sm);font-size:13px;color:#8b6233">低谷期不用高峰期标准要求自己。</div>
     <button class="btn-ghost" style="margin-top:10px" onclick="closeModal()">取消</button>`);
 }
+function previewMode(m){
+  // 如果已经是这个模式，直接关闭
+  if(m===currentMode){closeModal();return;}
+  const label=m==='peak'?'⚡ 高峰模式':'🌙 低谷模式';
+  const desc=m==='peak'?'切换后清单换为高峰版，并记录一次能量事件。':'切换后清单换为低谷版，并记录一次能量事件。';
+  showModal(`<div class="modal-title">${label}</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.7">${desc}</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn-primary" onclick="setMode('${m}')">切换状态 · 记录到图表</button>
+      <button class="btn-ghost" onclick="peekMode('${m}')">先看看要求，不切换</button>
+      <button class="btn-ghost" onclick="openModeSwitch()">← 返回</button>
+    </div>`);
+}
+function peekMode(m){
+  // 仅切换界面显示，不记录能量事件，不改 DB
+  currentMode=m;
+  closeModal();renderMode();renderChecklist();
+  showToast('👁 仅预览 '+( m==='peak'?'高峰':'低谷')+'模式要求，未记录');
+}
 function setMode(m){
-  currentMode=m;DB.set('mode',m);logEnergyEvent(m,false);
-  closeModal();renderMode();renderChecklist();showToast(m==='peak'?'⚡ 高峰模式':'🌙 低谷模式');
+  currentMode=m;DB.set('mode',m);
+  // 记录带时间戳的能量事件
+  logEnergyEvent(m,false);
+  closeModal();renderMode();renderChecklist();showToast(m==='peak'?'⚡ 已切换：高峰模式':'🌙 已切换：低谷模式');
 }
 
 // ── CHECKLIST ─────────────────────────────────────────────
@@ -594,7 +631,6 @@ function getTodayMeals(){
 }
 
 function getProteinSubs(){
-  // 每一条今天的正餐/加餐记录生成一个蛋白质子任务
   const meals = getTodayMeals();
   const proteinChecks = DB.get('proteinChecks')||{};
   const todayChecks = proteinChecks[todayKey]||{};
@@ -602,7 +638,8 @@ function getProteinSubs(){
   return meals.map(m=>{
     const label = slotLabel[m.slot]||m.slot;
     const food = m.note ? `（${m.note}）` : '';
-    return { id: m.id, label: `${label}先吃蛋白质${food}`, done: !!todayChecks[m.id] };
+    const isSnack = m.slot==='snack';
+    return { id: m.id, label: `${label}先吃蛋白质${food}`, done: !!todayChecks[m.id], isSnack };
   });
 }
 
@@ -622,8 +659,8 @@ function toggleProteinExpand(){
 
 function renderChecklist(){
   const subs = getProteinSubs();
-  const subDone = subs.filter(s=>s.done).length;
-  const subTotal = subs.length;
+  const subDone = subs.filter(s=>s.done).length;          // 分子：所有勾选（含加餐）
+  const subTotal = subs.filter(s=>!s.isSnack).length;     // 分母：只算正餐
 
   document.getElementById('checklistContainer').innerHTML=LISTS[currentMode].map(item=>{
     const done=checkedItems[item.id];
@@ -636,10 +673,11 @@ function renderChecklist(){
           <div class="check-box" style="width:18px;height:18px;border-radius:4px;flex-shrink:0;margin-top:0"><svg viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>
           <div><div class="check-label" style="font-size:13px">${s.label}</div></div>
         </div>`).join('') : '';
+      const proteinDoneMain = subTotal>0 ? subs.filter(s=>!s.isSnack&&s.done).length===subTotal&&subTotal>0 : !!checkedItems['protein'];
       return`<div>
-        <div class="check-item" style="${done?'opacity:.4':''}" onclick="toggleProteinExpand()">
-          <div class="check-box" style="${done?'background:var(--peak);border-color:var(--peak)':''}"><svg viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>
-          <div style="flex:1"><div class="check-label">${item.label}${badge}${arrow}</div><div class="check-note">${item.note}</div></div>
+        <div class="check-item" style="${proteinDoneMain?'opacity:.4':''}">
+          <div class="check-box" style="${proteinDoneMain?'background:var(--peak);border-color:var(--peak)':''}" onclick="toggleCheck('protein',this.closest('.check-item'))"><svg viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>
+          <div style="flex:1;cursor:pointer" onclick="toggleProteinExpand()"><div class="check-label">${item.label}${badge}${arrow}</div><div class="check-note">${item.note}</div></div>
         </div>
         ${subHtml}
       </div>`;
@@ -1070,44 +1108,145 @@ function renderMeasureChart(measures){
 function renderEnergyChart(){
   const ctx=document.getElementById('energyChart').getContext('2d');
   if(eChart)eChart.destroy();
-  const events=DB.get('energyEvents')||[];
-  if(events.length<2){noDataMsg(ctx,'记录积累后显示能量趋势');return}
+  const events=(DB.get('energyEvents')||[]).filter(e=>!e.auto); // 只看手动切换，不含自动标记
+  if(events.length<1){noDataMsg(ctx,'手动切换模式后这里会显示你的能量波动');return}
   const cut=new Date();cut.setDate(cut.getDate()-30);
-  const byDay={};events.forEach(ev=>{const d=new Date(ev.date);if(d<cut)return;const k=d.toDateString();if(!byDay[k])byDay[k]=[];byDay[k].push(ev);});
-  const days=Object.keys(byDay).sort((a,b)=>new Date(a)-new Date(b));
-  if(days.length<2){noDataMsg(ctx,'记录积累后显示能量趋势');return}
-  const labels=days.map(k=>dateLabel(new Date(k)));
-  const colors=days.map(k=>{const evs=byDay[k];if(evs.some(e=>e.auto&&e.mode==='low'))return'rgba(184,92,78,0.75)';const last=evs[evs.length-1];return last.mode==='peak'?'rgba(74,124,111,0.75)':'rgba(139,111,94,0.75)';});
-  const values=days.map(k=>{const evs=byDay[k];const peaks=evs.filter(e=>e.mode==='peak').length;return peaks>evs.length-peaks?75:35;});
-  eChart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data:values,backgroundColor:colors,borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#9b9088'}},y:{min:0,max:100,display:false}}}});
+  // 按时间排序，构建折线点：每次切换 = 一个折线点
+  const pts=events
+    .filter(e=>new Date(e.date)>=cut)
+    .sort((a,b)=>new Date(a.date)-new Date(b.date))
+    .map(e=>({
+      x: dateLabel(new Date(e.date))+' '+String(new Date(e.date).getHours()).padStart(2,'0')+'h',
+      y: e.mode==='peak'?80:30,
+      mode: e.mode
+    }));
+  if(pts.length<1){noDataMsg(ctx,'手动切换模式后这里会显示你的能量波动');return}
+  const labels=pts.map(p=>p.x);
+  const values=pts.map(p=>p.y);
+  const colors=pts.map(p=>p.mode==='peak'?'rgba(74,124,111,0.85)':'rgba(139,111,94,0.75)');
+  eChart=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[{
+      data:values,backgroundColor:colors,borderRadius:4,borderSkipped:false,
+      borderColor:pts.map(p=>p.mode==='peak'?'#4a7c6f':'#8b6f5e'),borderWidth:1
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:p=>p.raw===80?'⚡ 高峰':'🌙 低谷'}}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},color:'#9b9088',maxRotation:45}},
+        y:{min:0,max:100,display:false}
+      }
+    }
+  });
 }
+let combinedDays=7;
+function setCombinedDays(n,btn){
+  combinedDays=n;
+  document.querySelectorAll('#cDays7,#cDays14,#cDays30').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderCombinedChart();
+}
+
 function renderCombinedChart(){
-  const ctx=document.getElementById('combinedChart').getContext('2d');
-  if(cChart)cChart.destroy();
-  const weights=DB.get('weights')||[];const fasting=DB.get('fasting')||{};const events=DB.get('energyEvents')||[];
-  const cut=new Date();cut.setDate(cut.getDate()-30);
-  // Build daily labels for last 30 days
-  const labels=[],weightByDay={},windowByDay={},energyByDay={};
-  for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const k=d.toDateString();const lbl=dateLabel(d);labels.push(lbl);
-    // weight
-    const dayW=weights.filter(w=>new Date(w.date).toDateString()===k);weightByDay[lbl]=dayW.length?dayW[dayW.length-1].value:null;
-    // fasting window hours
-    const tf=fasting[k]||{};if(tf.firstMeal&&tf.lastMeal){windowByDay[lbl]=t2m(tf.lastMeal)-t2m(tf.firstMeal);windowByDay[lbl]=Math.max(0,Math.min(windowByDay[lbl],16*60))/60;}else windowByDay[lbl]=null;
-    // energy score
-    const dayEvts=events.filter(e=>new Date(e.date).toDateString()===k);
-    if(dayEvts.length){const peaks=dayEvts.filter(e=>e.mode==='peak').length;energyByDay[lbl]=peaks>dayEvts.length-peaks?80:30;}else energyByDay[lbl]=null;
+  const canvas=document.getElementById('combinedChart');
+  if(!canvas)return;
+  const weights=DB.get('weights')||[];
+  const fasting=DB.get('fasting')||{};
+  const days=combinedDays||7;
+
+  // 收集数据
+  const dayData=[];
+  for(let i=days-1;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);d.setHours(0,0,0,0);
+    const k=d.toDateString();
+    const tf=fasting[k]||{};
+    const dayWeights=weights.filter(w=>new Date(w.date).toDateString()===k);
+    dayData.push({
+      date:d, label:dateLabel(d), k,
+      firstMeal:tf.firstMeal||null,   // 'HH:MM'
+      lastMeal:tf.lastMeal||null,
+      windowHours:tf.windowHours||8,
+      weights:dayWeights.map(w=>({
+        min: new Date(w.date).getHours()*60+new Date(w.date).getMinutes(),
+        val: w.value
+      }))
+    });
   }
-  const wData=labels.map(l=>weightByDay[l]);const winData=labels.map(l=>windowByDay[l]);const eData=labels.map(l=>energyByDay[l]);
-  cChart=new Chart(ctx,{data:{labels,datasets:[
-    {type:'line',label:'体重',data:wData,borderColor:'#4a7c6f',backgroundColor:'transparent',yAxisID:'yW',tension:0.3,pointRadius:3,borderWidth:2,spanGaps:true},
-    {type:'bar',label:'进食窗口(h)',data:winData,backgroundColor:'rgba(196,149,106,0.4)',yAxisID:'yH',borderRadius:2},
-    {type:'bar',label:'能量',data:eData,backgroundColor:'rgba(139,111,94,0.3)',yAxisID:'yE',borderRadius:2},
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:12,padding:8}}},scales:{
-    x:{grid:{display:false},ticks:{font:{size:9},color:'#9b9088',maxRotation:45}},
-    yW:{position:'left',title:{display:true,text:'kg',font:{size:10}},ticks:{font:{size:10},color:'#4a7c6f'},grid:{color:'rgba(42,37,32,0.04)'}},
-    yH:{position:'right',title:{display:true,text:'h',font:{size:10}},min:0,max:16,ticks:{font:{size:10},color:'#c4956a'},grid:{display:false}},
-    yE:{display:false,min:0,max:100},
-  }}});
+
+  // Canvas 手绘
+  const dpr=window.devicePixelRatio||1;
+  const colW=Math.max(36, Math.floor((canvas.parentElement.clientWidth-60)/days));
+  const canvasW=60+colW*days;
+  const canvasH=260;
+  canvas.width=canvasW*dpr;canvas.height=canvasH*dpr;
+  canvas.style.width=canvasW+'px';canvas.style.height=canvasH+'px';
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,canvasW,canvasH);
+
+  // 布局
+  const leftPad=44, topPad=12, botPad=28, chartH=canvasH-topPad-botPad;
+  // 纵轴：0~24h，0分=顶，24h=底（更直觉：早上在上）
+  function minToY(min){ return topPad + (min/1440)*chartH; }
+
+  // 画纵轴刻度
+  ctx.font=`${9*dpr/dpr}px -apple-system,sans-serif`;ctx.fillStyle='#9b9088';ctx.textAlign='right';
+  [0,4,8,12,16,20,24].forEach(h=>{
+    const y=minToY(h*60);
+    ctx.fillText(h+'h',leftPad-4,y+3);
+    ctx.strokeStyle='rgba(42,37,32,0.05)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(leftPad,y);ctx.lineTo(canvasW-4,y);ctx.stroke();
+  });
+
+  // 每列
+  dayData.forEach((day,i)=>{
+    const x=leftPad+i*colW;
+    const cw=colW-3;
+
+    // 空腹段：深蓝绿色（昨晚lastMeal ~ 今天firstMeal）
+    // 简化：如有 firstMeal，画 0~firstMeal 为空腹
+    if(day.firstMeal){
+      const fm=t2m(day.firstMeal);
+      // 凌晨到第一餐 = 空腹段
+      ctx.fillStyle='rgba(74,124,111,0.18)';
+      ctx.fillRect(x+2,minToY(0),cw,minToY(fm)-minToY(0));
+
+      // 进食窗口段
+      const lm=day.lastMeal?t2m(day.lastMeal):fm+day.windowHours*60;
+      const eatEnd=Math.min(lm,1440);
+      ctx.fillStyle='rgba(196,149,106,0.28)';
+      ctx.fillRect(x+2,minToY(fm),cw,minToY(eatEnd)-minToY(fm));
+
+      // 进食窗口后到次日 = 空腹段
+      if(eatEnd<1440){
+        ctx.fillStyle='rgba(74,124,111,0.18)';
+        ctx.fillRect(x+2,minToY(eatEnd),cw,minToY(1440)-minToY(eatEnd));
+      }
+
+      // 进食窗口边框线
+      ctx.strokeStyle='rgba(196,149,106,0.6)';ctx.lineWidth=1;
+      ctx.strokeRect(x+2,minToY(fm),cw,Math.max(2,minToY(eatEnd)-minToY(fm)));
+    }
+
+    // 体重点
+    day.weights.forEach(w=>{
+      const y=minToY(w.min);
+      ctx.beginPath();ctx.arc(x+cw/2+2,y,4,0,Math.PI*2);
+      ctx.fillStyle='#8b6f5e';ctx.fill();
+      ctx.strokeStyle='white';ctx.lineWidth=1.5;ctx.stroke();
+      // 体重数值
+      ctx.font=`${8}px -apple-system,sans-serif`;
+      ctx.fillStyle='#6b6158';ctx.textAlign='center';
+      ctx.fillText(w.val,x+cw/2+2,y-7);
+    });
+
+    // 日期标签
+    ctx.font=`${9}px -apple-system,sans-serif`;ctx.fillStyle='#9b9088';ctx.textAlign='center';
+    ctx.fillText(day.label,x+cw/2+2,canvasH-8);
+  });
 }
 
 // ── ALL RECORDS LIST ──────────────────────────────────────
@@ -1244,6 +1383,6 @@ setInterval(renderTodaySummary,60000);
 init();
 if(!DB.get('_launched')){DB.set('_launched','1');setTimeout(()=>showToast('👋 先选择今天的状态模式吧'),1200)}
 </script>
-    <script type="module" src="/index.tsx"></script>
+  <script type="module" src="/index.tsx"></script>
 </body>
 </html>
